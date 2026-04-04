@@ -1928,6 +1928,16 @@ class MightyGame {
 
   getPlayableCards(player) {
     const hand = this.hands[player];
+    const mighty = this.getMightyCard();
+
+    // 조커콜 당한 경우: 조커 보유자는 반드시 조커를 내야 함
+    // 단, 마이티도 갖고 있으면 마이티로 조커를 보호할 수 있음
+    if (this.jokerCalled && this.currentTrick.length > 0 && hand.includes('joker')) {
+      const options = ['joker'];
+      if (hand.includes(mighty)) options.push(mighty);
+      return options;
+    }
+
     if (this.currentTrick.length === 0) {
       if (this.trickNumber === 0) {
         let playable = hand.filter(c => {
@@ -1948,7 +1958,6 @@ class MightyGame {
     const leadCard = parseCard(this.currentTrick[0].card);
     const leadSuit = leadCard.isJoker ? this.jokerDeclaredSuit : leadCard.suit;
 
-    const mighty = this.getMightyCard();
     const suitCards = hand.filter(c => {
       if (c === 'joker') return false;
       if (this.isMighty(c)) return false;
@@ -2676,6 +2685,16 @@ async function startGame() {
   game.deal();
   game.initCardCounter();
 
+  // 딜미스 체크
+  const dealMissChecked = await checkDealMiss();
+  if (dealMissChecked) {
+    // 딜미스 선언됨 - 다시 딜
+    $('hand-container').innerHTML = '';
+    for (let p = 1; p < 5; p++) { const el = $(`ai-hand-${p}`); if (el) el.innerHTML = ''; }
+    startGame();
+    return;
+  }
+
   // 카드를 한 장씩 돌려주는 연출
   const handContainer = $('hand-container');
   handContainer.innerHTML = '';
@@ -3352,7 +3371,8 @@ async function doTrick(trickNum) {
     if (isLocalPlayer(currentPlayer)) {
       // === 로컬 플레이어 ===
       const jcCard = game.getJokerCallCard();
-      if (trickNum > 0 && trickNum < 9 && i === 0 && game.hands[localPlayerIndex].includes(jcCard)) {
+      const canJC = trickNum > 0 && trickNum < 9 && i === 0 && game.hands[localPlayerIndex].includes(jcCard);
+      if (canJC) {
         $('joker-call-btn').style.display = 'block';
       }
 
@@ -3360,6 +3380,9 @@ async function doTrick(trickNum) {
       updatePlayerHand(true, playable);
       const chosenCard = await waitForUI();
       $('joker-call-btn').style.display = 'none';
+
+      // 조커콜카드를 리드로 냈지만 조커콜 버튼을 안 눌렀으면 일반 카드로 처리
+      // (jokerCalled는 doJokerCall에서 true로 설정됨)
 
       if (chosenCard === 'joker' && i === 0) {
         const suit = await pickJokerSuit();
@@ -3466,6 +3489,52 @@ function checkFriendReveal(card, player) {
       showMessage(`${game.playerNames[player]}이(가) 프렌드!`, 1800);
     }
   }
+}
+
+// ==================== 딜미스 체크 ====================
+function isDealMiss(hand) {
+  const pointCards = hand.filter(c => {
+    if (c === 'joker') return false;
+    return isPointCard(c);
+  });
+  // 점수카드 0장 → 딜미스
+  if (pointCards.length === 0) return true;
+  // 점수카드 1장 + 조커 → 딜미스
+  if (pointCards.length === 1 && hand.includes('joker')) return true;
+  return false;
+}
+
+async function checkDealMiss() {
+  // 모든 플레이어의 딜미스 체크
+  for (let p = 0; p < 5; p++) {
+    if (!isDealMiss(game.hands[p])) continue;
+
+    if (isLocalPlayer(p)) {
+      // 로컬 플레이어: 선택 가능
+      const choice = await new Promise(resolve => {
+        const html = `
+          <h2>딜미스!</h2>
+          <p style="text-align:center">점수 카드가 부족합니다.<br>딜미스를 선언하시겠습니까?</p>
+          <p style="text-align:center;color:#aaa;font-size:13px">선언하면 이번 판을 다시 시작합니다.</p>
+          <div class="btn-row">
+            <button class="btn primary" id="dm-yes">딜미스 선언</button>
+            <button class="btn" id="dm-no">그냥 진행</button>
+          </div>`;
+        const modal = showModal(html);
+        modal.querySelector('#dm-yes').addEventListener('click', () => { removeModal(modal); resolve(true); });
+        modal.querySelector('#dm-no').addEventListener('click', () => { removeModal(modal); resolve(false); });
+      });
+      if (choice) {
+        await showMessage('딜미스! 다시 딜합니다.', 2000);
+        return true;
+      }
+    } else {
+      // AI/원격: 항상 딜미스 선언
+      await showMessage(`${game.playerNames[p]}: 딜미스! 다시 딜합니다.`, 2200);
+      return true;
+    }
+  }
+  return false;
 }
 
 game.doJokerCall = function() {
