@@ -3006,11 +3006,23 @@ async function doExchange() {
     });
 
     await new Promise(resolve => {
+      const origTrump = game.trump;
+      const origBidNum = game.currentBid.number;
       let newTrump = game.trump;
       let newBidNum = game.currentBid.number;
+      let minBidNum = game.currentBid.number; // 절대 이 아래로 못 내림
       let modal = null;
 
+      function calcMinBid() {
+        // 기루다 변경 시 최소 공약 계산
+        if (newTrump === origTrump) return origBidNum;
+        if (origTrump !== 'notrump' && newTrump === 'notrump') return origBidNum + 1;
+        return origBidNum + 2;
+      }
+
       function renderTrumpBid() {
+        minBidNum = calcMinBid();
+        if (newBidNum < minBidNum) newBidNum = minBidNum;
         const trumpText = newTrump === 'notrump' ? 'NT' : SUIT_SYMBOLS[newTrump];
         const trumpColor = newTrump === 'notrump' ? '#FFD700' : SUIT_COLORS[newTrump];
         const html = `
@@ -3029,7 +3041,7 @@ async function doExchange() {
           <div style="text-align:center;margin-bottom:14px">
             <span style="color:#aaa;font-size:13px">공약 추가</span><br>
             <div class="btn-row" style="margin-top:6px">
-              <button class="btn" id="bid-down" ${newBidNum <= game.currentBid.number ? 'disabled' : ''}>-</button>
+              <button class="btn" id="bid-down" ${newBidNum <= minBidNum ? 'disabled' : ''}>-</button>
               <span style="font-size:24px;font-weight:bold;color:#FFD700;min-width:50px;display:inline-block">${newBidNum}</span>
               <button class="btn" id="bid-up" ${newBidNum >= 20 ? 'disabled' : ''}>+</button>
             </div>
@@ -3042,16 +3054,7 @@ async function doExchange() {
 
         modal.querySelectorAll('[data-newsuit]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const suit = btn.dataset.newsuit;
-            if (suit !== game.trump) {
-              // 기루다 변경 시 공약 자동 상승
-              if (game.trump !== 'notrump' && suit === 'notrump') {
-                newBidNum = Math.max(newBidNum, game.currentBid.number + 1);
-              } else if (suit !== newTrump) {
-                newBidNum = Math.max(newBidNum, game.currentBid.number + 2);
-              }
-            }
-            newTrump = suit;
+            newTrump = btn.dataset.newsuit;
             renderTrumpBid();
           });
         });
@@ -3059,7 +3062,7 @@ async function doExchange() {
           if (newBidNum < 20) { newBidNum++; renderTrumpBid(); }
         });
         modal.querySelector('#bid-down')?.addEventListener('click', () => {
-          if (newBidNum > game.currentBid.number) { newBidNum--; renderTrumpBid(); }
+          if (newBidNum > minBidNum) { newBidNum--; renderTrumpBid(); }
         });
         modal.querySelector('#confirm-trump-bid').addEventListener('click', () => {
           game.trump = newTrump;
