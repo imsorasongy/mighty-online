@@ -591,6 +591,128 @@ canvas.card-canvas { image-rendering: auto; }
   background: #FFD700;
   color: #0d1a0d;
 }
+
+/* ==================== MOBILE RESPONSIVE ==================== */
+@media (max-width: 768px) {
+  body { overflow: auto; height: auto; min-height: 100vh; }
+  #game-container { width: 100vw; min-height: 100vh; height: auto; overflow: visible; }
+
+  /* Top bar */
+  #top-bar { height: 40px; padding: 0 10px; }
+  #top-bar .logo { font-size: 18px; letter-spacing: 1px; }
+  #top-bar .info { font-size: 12px; }
+
+  /* Sound buttons */
+  #bgm-btn, #sfx-btn {
+    top: 44px; font-size: 11px; padding: 4px 8px;
+    min-width: 60px; height: 28px; line-height: 16px;
+    border-radius: 6px;
+  }
+  #bgm-btn { right: 8px; }
+  #sfx-btn { right: 74px; }
+
+  /* Trump indicator */
+  #trump-indicator {
+    top: 44px; left: 50%; padding: 4px 12px;
+    font-size: 13px; border-radius: 6px;
+  }
+
+  /* Trick & Point counters */
+  #trick-counter, #point-counter {
+    top: 44px; padding: 4px 8px; font-size: 12px;
+    border-radius: 6px;
+  }
+  #trick-counter { left: 8px; }
+  #point-counter { right: 140px; }
+
+  /* Player positions - compact layout */
+  .player-area { z-index: 10; }
+  .player-avatar { width: 36px; height: 36px; font-size: 20px; margin-bottom: 2px; border-width: 2px; }
+  .player-area .name-tag { font-size: 11px; padding: 2px 8px; border-radius: 5px; }
+  .player-area .score-display { font-size: 10px; }
+
+  #player-0 { bottom: 5px; left: 50%; transform: translateX(-50%); }
+  #player-1 { left: 5px; top: 35%; transform: none; }
+  #player-2 { left: 18%; top: 76px; }
+  #player-3 { right: 18%; top: 76px; }
+  #player-4 { right: 5px; top: 35%; transform: none; }
+
+  /* AI hands - smaller */
+  .ai-hand canvas { width: 24px !important; height: 34px !important; }
+
+  /* Hand cards */
+  #hand-container { bottom: 45px; }
+  .hand-card { width: 48px; height: 70px; margin-left: -14px; border-radius: 5px; }
+  .hand-card:first-child { margin-left: 0; }
+  .hand-card:hover { transform: translateY(-10px); }
+  .hand-card.selected { transform: translateY(-16px); }
+
+  /* Center play area */
+  #play-area { width: 220px; height: 180px; }
+  .played-card-slot { width: 44px; height: 64px; }
+  .played-card { width: 44px; height: 64px; border-radius: 4px; }
+  #slot-0 { bottom: 5px; }
+  #slot-1 { left: 10px; }
+  #slot-2 { top: 5px; left: 30%; }
+  #slot-3 { top: 5px; right: 30%; }
+  #slot-4 { right: 10px; }
+
+  /* Joker call button */
+  #joker-call-btn { bottom: 120px; font-size: 14px; padding: 8px 16px; }
+
+  /* Scoreboard */
+  #scoreboard { bottom: 8px; right: 8px; padding: 6px 10px; font-size: 11px; min-width: 120px; }
+  #scoreboard h3 { font-size: 12px; margin-bottom: 4px; }
+  #scoreboard .sb-row { font-size: 11px; padding: 2px 0; }
+
+  /* Won cards */
+  .won-cards { max-width: 120px; }
+  .won-cards .won-card { width: 28px; height: 40px; border-radius: 3px; }
+
+  /* Message area */
+  #message-area { font-size: 16px; padding: 12px 24px; border-radius: 10px; }
+
+  /* Modals */
+  .modal { padding: 18px 16px; min-width: 280px; max-width: 92vw; max-height: 85vh; border-radius: 12px; }
+  .modal h2 { font-size: 18px; margin-bottom: 12px; }
+  .modal p { font-size: 14px; margin-bottom: 10px; }
+  .btn { padding: 8px 14px; font-size: 13px; border-radius: 6px; }
+  .btn-row { gap: 6px; }
+
+  /* Bid controls */
+  .suit-btn { width: 38px; height: 38px; font-size: 22px; border-radius: 8px; }
+  .suit-select { gap: 6px; }
+  .bid-number { font-size: 26px; gap: 10px; }
+  .bid-number .btn { font-size: 18px; width: 36px; height: 36px; }
+  .rank-btn { width: 32px; height: 32px; font-size: 13px; border-radius: 6px; }
+  .rank-select { gap: 3px; }
+
+  /* Card row in modals */
+  .card-row { gap: 3px; }
+  .card-row canvas { width: 42px !important; height: 60px !important; }
+
+  /* Score table */
+  .score-table th, .score-table td { padding: 5px 6px; font-size: 13px; }
+
+  /* Title screen */
+  #title-screen h1 { font-size: 48px; letter-spacing: 6px; }
+  #title-screen .subtitle { font-size: 16px; letter-spacing: 3px; margin-bottom: 40px; }
+  #title-screen .menu-btn { width: 220px; font-size: 16px; padding: 14px 0; }
+  #title-screen .sub-panel { padding: 24px 20px; min-width: 280px; max-width: 90vw; }
+  #title-screen .deco-card { width: 60px; height: 87px; }
+}
+
+/* Extra small phones */
+@media (max-width: 400px) {
+  .hand-card { width: 40px; height: 58px; margin-left: -12px; }
+  #play-area { width: 180px; height: 150px; }
+  .played-card-slot { width: 36px; height: 52px; }
+  .played-card { width: 36px; height: 52px; }
+  .player-avatar { width: 30px; height: 30px; font-size: 16px; }
+  .player-area .name-tag { font-size: 10px; padding: 2px 6px; }
+  #title-screen h1 { font-size: 36px; }
+  .modal { padding: 14px 12px; min-width: 260px; }
+}
 </style>
 </head>
 <body>
@@ -2186,23 +2308,30 @@ function showMessage(text, duration = 1800) {
 }
 
 function updateAIHands() {
+  const bw = isMobile() ? 24 : 36;
+  const bh = isMobile() ? 34 : 52;
+  const ml = isMobile() ? '-6px' : '-10px';
   for (let i = 1; i < 5; i++) {
     const el = $(`ai-hand-${i}`);
     el.innerHTML = '';
     for (let j = 0; j < game.hands[i].length; j++) {
-      const back = renderCardBack(36, 52);
-      back.style.marginLeft = j === 0 ? '0' : '-10px';
+      const back = renderCardBack(bw, bh);
+      back.style.marginLeft = j === 0 ? '0' : ml;
       el.appendChild(back);
     }
   }
 }
 
+function isMobile() { return window.innerWidth <= 768; }
+
 function updatePlayerHand(clickable = false, playableCards = null) {
   const container = $('hand-container');
   container.innerHTML = '';
   const hand = game.hands[localPlayerIndex];
+  const cw = isMobile() ? 48 : 80;
+  const ch = isMobile() ? 70 : 116;
   for (let i = 0; i < hand.length; i++) {
-    const cardEl = renderCard(hand[i], 80, 116);
+    const cardEl = renderCard(hand[i], cw, ch);
     cardEl.classList.add('hand-card');
     cardEl.dataset.card = hand[i];
     cardEl.dataset.index = i;
@@ -2279,22 +2408,23 @@ function updateWonCardsDisplay() {
     const isFriendRevealed = i === game.friend && game.friendRevealed;
 
     // 주공 + 밝혀진 프렌드: 카드를 뒤집어서 덮음 (카드 뒷면만 표시)
+    const ww = isMobile() ? 28 : 44;
+    const wh = isMobile() ? 40 : 64;
     if (isDeclarer || isFriendRevealed) {
       const count = game.playerWonPointCards[i].length;
       if (count > 0) {
         for (let j = 0; j < count; j++) {
-          const back = renderCardBack(44, 64);
+          const back = renderCardBack(ww, wh);
           back.classList.add('won-card');
-          back.style.marginLeft = j === 0 ? '0' : '-20px';
+          back.style.marginLeft = j === 0 ? '0' : (isMobile() ? '-14px' : '-20px');
           container.appendChild(back);
         }
       }
     } else {
-      // 야당 + 아직 안 밝혀진 프렌드: 점수 카드를 앞면으로 보여줌
       for (let j = 0; j < game.playerWonPointCards[i].length; j++) {
-        const card = renderCard(game.playerWonPointCards[i][j], 44, 64);
+        const card = renderCard(game.playerWonPointCards[i][j], ww, wh);
         card.classList.add('won-card');
-        card.style.marginLeft = j === 0 ? '0' : '-10px';
+        card.style.marginLeft = j === 0 ? '0' : (isMobile() ? '-6px' : '-10px');
         container.appendChild(card);
       }
     }
@@ -2376,7 +2506,9 @@ async function showShuffleAnimation() {
 
 function placeCardInSlot(player, cardStr) {
   const slot = $(`slot-${player}`);
-  const cardEl = renderCard(cardStr, 72, 104);
+  const pw = isMobile() ? 44 : 72;
+  const ph = isMobile() ? 64 : 104;
+  const cardEl = renderCard(cardStr, pw, ph);
   cardEl.classList.add('played-card');
   slot.innerHTML = '';
   slot.appendChild(cardEl);
