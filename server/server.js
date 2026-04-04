@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const os = require('os');
+const localtunnel = require('localtunnel');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +17,23 @@ app.use(express.static(path.join(__dirname, '..')));
 // Serve 온라인마이티.html as the default page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', '온라인마이티.html'));
+});
+
+// 터널 URL 저장
+let tunnelUrl = null;
+
+// API: 서버 접속 주소 반환
+app.get('/api/server-info', (req, res) => {
+  const addresses = [];
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        addresses.push(iface.address);
+      }
+    }
+  }
+  res.json({ addresses, port: PORT, tunnelUrl });
 });
 
 // ==================== ROOM MANAGEMENT ====================
@@ -142,6 +161,44 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`마이티 서버 실행 중: http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log('');
+  console.log('========================================');
+  console.log('  Mighty Online Server Running');
+  console.log('========================================');
+  console.log(`  [Local]  http://localhost:${PORT}`);
+
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        console.log(`  [Wi-Fi]  http://${iface.address}:${PORT}`);
+      }
+    }
+  }
+
+  // 외부 접속용 터널 생성
+  try {
+    console.log('');
+    console.log('  Creating internet tunnel...');
+    const tunnel = await localtunnel({ port: PORT });
+    tunnelUrl = tunnel.url;
+    console.log(`  [Internet]  ${tunnelUrl}`);
+    console.log('');
+    console.log('  Share the Internet URL with friends!');
+
+    tunnel.on('close', () => {
+      console.log('  Tunnel closed.');
+      tunnelUrl = null;
+    });
+    tunnel.on('error', (err) => {
+      console.log('  Tunnel error:', err.message);
+    });
+  } catch (e) {
+    console.log('  Tunnel failed:', e.message);
+    console.log('  (LAN access still works)');
+  }
+
+  console.log('========================================');
+  console.log('');
 });

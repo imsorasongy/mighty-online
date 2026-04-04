@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>마이티 (Mighty)</title>
+<script src="/socket.io/socket.io.js"></script>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -446,10 +447,9 @@ canvas.card-canvas { image-rendering: auto; }
 }
 
 /* BGM toggle */
-#bgm-btn {
+#bgm-btn, #sfx-btn {
   position: absolute;
   top: 62px;
-  right: 180px;
   background: rgba(0,0,0,0.8);
   border: 2px solid #555;
   border-radius: 10px;
@@ -460,24 +460,15 @@ canvas.card-canvas { image-rendering: auto; }
   cursor: pointer;
   z-index: 90;
   transition: all 0.15s;
+  min-width: 100px;
+  height: 38px;
+  line-height: 18px;
+  text-align: center;
 }
+#bgm-btn { right: 180px; }
+#sfx-btn { right: 290px; }
 #bgm-btn:hover, #sfx-btn:hover { border-color: #FFD700; color: #FFD700; }
 #bgm-btn.on, #sfx-btn.on { border-color: #4caf50; color: #4caf50; }
-#sfx-btn {
-  position: absolute;
-  top: 62px;
-  right: 290px;
-  background: rgba(0,0,0,0.8);
-  border: 2px solid #555;
-  border-radius: 10px;
-  padding: 8px 16px;
-  font-size: 15px;
-  font-weight: bold;
-  color: #ccc;
-  cursor: pointer;
-  z-index: 90;
-  transition: all 0.15s;
-}
 
 /* ====== Title Screen ====== */
 #title-screen {
@@ -2766,43 +2757,125 @@ async function doExchange() {
     });
 
     await new Promise(resolve => {
-      const html = `
-        <h2>기루다 변경</h2>
-        <p style="text-align:center">기루다를 변경하시겠습니까?<br><small style="color:#aaa">변경 시 공약 수가 올라갑니다</small></p>
-        <div class="btn-row">
-          <button class="btn" id="keep-trump">유지</button>
-          ${SUITS.map(s => `<button class="btn" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
-          <button class="btn" data-newsuit="notrump" style="color:#FFD700">NT</button>
-        </div>`;
-      const modal = showModal(html);
-      modal.querySelector('#keep-trump').addEventListener('click', () => { removeModal(modal); resolve(); });
-      modal.querySelectorAll('[data-newsuit]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const newSuit = btn.dataset.newsuit;
-          if (newSuit !== game.trump) {
-            if (game.trump !== 'notrump' && newSuit === 'notrump') {
-              game.currentBid.number = Math.min(game.currentBid.number + 1, 20);
-            } else {
-              game.currentBid.number = Math.min(game.currentBid.number + 2, 20);
+      let newTrump = game.trump;
+      let newBidNum = game.currentBid.number;
+      let modal = null;
+
+      function renderTrumpBid() {
+        const trumpText = newTrump === 'notrump' ? 'NT' : SUIT_SYMBOLS[newTrump];
+        const trumpColor = newTrump === 'notrump' ? '#FFD700' : SUIT_COLORS[newTrump];
+        const html = `
+          <h2>기루다 / 공약 변경</h2>
+          <p style="text-align:center;font-size:20px;margin:10px 0">
+            현재: <span style="color:${trumpColor};font-weight:bold">${newBidNum} ${trumpText}</span>
+          </p>
+          <p style="text-align:center;color:#aaa;font-size:13px;margin-bottom:10px">기루다 변경 시 공약이 자동으로 올라갑니다</p>
+          <div style="text-align:center;margin-bottom:12px">
+            <span style="color:#aaa;font-size:13px">기루다 선택</span><br>
+            <div class="btn-row" style="margin-top:6px">
+              ${SUITS.map(s => `<button class="btn ${newTrump === s ? 'primary' : ''}" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
+              <button class="btn ${newTrump === 'notrump' ? 'primary' : ''}" data-newsuit="notrump" style="color:#FFD700">NT</button>
+            </div>
+          </div>
+          <div style="text-align:center;margin-bottom:14px">
+            <span style="color:#aaa;font-size:13px">공약 추가</span><br>
+            <div class="btn-row" style="margin-top:6px">
+              <button class="btn" id="bid-down" ${newBidNum <= game.currentBid.number ? 'disabled' : ''}>-</button>
+              <span style="font-size:24px;font-weight:bold;color:#FFD700;min-width:50px;display:inline-block">${newBidNum}</span>
+              <button class="btn" id="bid-up" ${newBidNum >= 20 ? 'disabled' : ''}>+</button>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="confirm-trump-bid">확인</button>
+          </div>`;
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+
+        modal.querySelectorAll('[data-newsuit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const suit = btn.dataset.newsuit;
+            if (suit !== game.trump) {
+              // 기루다 변경 시 공약 자동 상승
+              if (game.trump !== 'notrump' && suit === 'notrump') {
+                newBidNum = Math.max(newBidNum, game.currentBid.number + 1);
+              } else if (suit !== newTrump) {
+                newBidNum = Math.max(newBidNum, game.currentBid.number + 2);
+              }
             }
-            game.trump = newSuit;
-            updateTrumpIndicator();
-          }
+            newTrump = suit;
+            renderTrumpBid();
+          });
+        });
+        modal.querySelector('#bid-up')?.addEventListener('click', () => {
+          if (newBidNum < 20) { newBidNum++; renderTrumpBid(); }
+        });
+        modal.querySelector('#bid-down')?.addEventListener('click', () => {
+          if (newBidNum > game.currentBid.number) { newBidNum--; renderTrumpBid(); }
+        });
+        modal.querySelector('#confirm-trump-bid').addEventListener('click', () => {
+          game.trump = newTrump;
+          game.currentBid.number = newBidNum;
+          updateTrumpIndicator();
           removeModal(modal);
           resolve();
         });
-      });
+      }
+      renderTrumpBid();
     });
 
     updatePlayerHand();
+  } else if (isRemotePlayer(game.declarer)) {
+    // === 원격 플레이어가 주공 ===
+    if (multiplayerMode.isHost) {
+      const allCards = [...game.hands[game.declarer], ...game.kitty];
+      game.sortHand(allCards);
+      const kittyLabel = game.kitty.map(c => {
+        const cc = parseCard(c);
+        return cc.isJoker ? 'JK' : cc.rank + SUIT_SYMBOLS[cc.suit];
+      }).join(', ');
+
+      HostAdapter.broadcastState();
+      const res = await HostAdapter.waitForRemote(game.declarer, 'your-turn-exchange', {
+        allCards, kittyLabel
+      });
+
+      let discards;
+      if (res && !res.aiTakeover && res.discards) {
+        discards = res.discards;
+      } else {
+        game.hands[game.declarer] = allCards;
+        discards = game.aiExchange(game.declarer);
+      }
+      game.discardedPoints = discards.filter(c => isPointCard(c)).length;
+      game.hands[game.declarer] = allCards.filter(c => !discards.includes(c));
+      updateAIHands();
+
+      // 기루다/공약 변경
+      const trumpRes = await HostAdapter.waitForRemote(game.declarer, 'your-turn-trump-change', {
+        currentTrump: game.trump,
+        currentBidNum: game.currentBid.number
+      });
+      if (trumpRes && !trumpRes.aiTakeover) {
+        if (trumpRes.newTrump && trumpRes.newTrump !== game.trump) {
+          game.trump = trumpRes.newTrump;
+          updateTrumpIndicator();
+        }
+        if (trumpRes.newBidNum && trumpRes.newBidNum > game.currentBid.number) {
+          game.currentBid.number = Math.min(trumpRes.newBidNum, 20);
+        }
+      }
+
+      HostAdapter.broadcastState();
+      await showMessage(`${game.playerNames[game.declarer]}이(가) 카드를 교환했습니다`, 1400);
+    }
   } else {
+    // === AI 주공 ===
     await delay(800);
     const allCards = [...game.hands[game.declarer], ...game.kitty];
     game.sortHand(allCards);
     game.hands[game.declarer] = allCards;
     const discards = game.aiExchange(game.declarer);
     game.discardedPoints = discards.filter(c => isPointCard(c)).length;
-    // 버린 점수카드는 나중에 게임 끝날 때 반영 (미리 노출하지 않음)
     game.hands[game.declarer] = allCards.filter(c => !discards.includes(c));
     updateAIHands();
     await showMessage(`${game.playerNames[game.declarer]}이(가) 카드를 교환했습니다`, 1400);
@@ -2835,8 +2908,17 @@ async function doFriendSelection() {
             <p style="font-size:22px;color:#FFD700;font-weight:bold">선택: ${previewText}</p>
             <div class="btn-row">
               <button class="btn primary" id="friend-card-confirm">카드 지정</button>
+              <button class="btn" id="friend-mighty" style="color:#FFD700">👑 마이티</button>
+              <button class="btn" id="friend-joker" style="color:#e040fb">🃏 조커</button>
+              <button class="btn" id="friend-player-show" style="color:#4FC3F7">👤 사람 지정</button>
               <button class="btn" id="friend-first">초구 프렌드</button>
               <button class="btn" id="friend-none">노프렌드</button>
+            </div>
+            <div id="friend-player-list" style="display:none;margin-top:10px">
+              <p style="color:#aaa;font-size:13px;margin-bottom:6px;text-align:center">프렌드로 지정할 플레이어를 선택하세요</p>
+              ${[0,1,2,3,4].filter(i => i !== localPlayerIndex).map(i =>
+                `<button class="btn" data-fplayer="${i}" style="margin:3px;min-width:120px">${game.playerNames[i]}</button>`
+              ).join('')}
             </div>
           </div>`;
 
@@ -2854,14 +2936,59 @@ async function doFriendSelection() {
           game.friendCard = fc;
           game.friendType = 'card';
           if (game.hands[localPlayerIndex].includes(fc)) {
-            game.friend = 0;
+            game.friend = localPlayerIndex;
           } else {
-            for (let i = 1; i < 5; i++) {
+            for (let i = 0; i < 5; i++) {
+              if (i === localPlayerIndex) continue;
               if (game.hands[i].includes(fc)) { game.friend = i; break; }
             }
           }
           removeModal(modal);
           resolve();
+        });
+        modal.querySelector('#friend-mighty').addEventListener('click', () => {
+          const mightyCard = game.getMightyCard();
+          game.friendCard = mightyCard;
+          game.friendType = 'card';
+          if (game.hands[localPlayerIndex].includes(mightyCard)) {
+            game.friend = localPlayerIndex;
+          } else {
+            for (let i = 0; i < 5; i++) {
+              if (i === localPlayerIndex) continue;
+              if (game.hands[i].includes(mightyCard)) { game.friend = i; break; }
+            }
+          }
+          removeModal(modal);
+          resolve();
+        });
+        modal.querySelector('#friend-joker').addEventListener('click', () => {
+          game.friendCard = 'joker';
+          game.friendType = 'card';
+          if (game.hands[localPlayerIndex].includes('joker')) {
+            game.friend = localPlayerIndex;
+          } else {
+            for (let i = 0; i < 5; i++) {
+              if (i === localPlayerIndex) continue;
+              if (game.hands[i].includes('joker')) { game.friend = i; break; }
+            }
+          }
+          removeModal(modal);
+          resolve();
+        });
+        modal.querySelector('#friend-player-show').addEventListener('click', () => {
+          const list = modal.querySelector('#friend-player-list');
+          list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        });
+        modal.querySelectorAll('[data-fplayer]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const seat = parseInt(btn.dataset.fplayer);
+            game.friendType = 'player';
+            game.friendCard = null;
+            game.friend = seat;
+            game.friendRevealed = false;
+            removeModal(modal);
+            resolve();
+          });
         });
         modal.querySelector('#friend-first').addEventListener('click', () => {
           game.friendType = 'first';
@@ -2879,7 +3006,48 @@ async function doFriendSelection() {
       let modal = null;
       render();
     });
+  } else if (isRemotePlayer(game.declarer)) {
+    // === 원격 플레이어가 주공 ===
+    if (multiplayerMode.isHost) {
+      HostAdapter.broadcastState();
+      const res = await HostAdapter.waitForRemote(game.declarer, 'your-turn-friend', {});
+
+      let choice;
+      if (res && !res.aiTakeover && res.type) {
+        choice = res;
+      } else {
+        choice = game.aiSelectFriend(game.declarer);
+      }
+
+      if (choice.type === 'card') {
+        game.friendType = 'card';
+        game.friendCard = choice.isJoker ? 'joker' : choice.isMighty ? game.getMightyCard() : cardId(choice.suit, choice.rank);
+        for (let i = 0; i < 5; i++) {
+          if (i === game.declarer) continue;
+          if (game.hands[i].includes(game.friendCard)) { game.friend = i; break; }
+        }
+        if (game.friend === -1 && game.hands[game.declarer].includes(game.friendCard)) game.friend = game.declarer;
+        const cc = parseCard(game.friendCard);
+        const cardName = cc.isJoker ? '조커' : `${cc.rank}${SUIT_SYMBOLS[cc.suit]}`;
+        await showMessage(`프렌드: ${cardName} 소유자`, 1800);
+      } else if (choice.type === 'player') {
+        game.friendType = 'player';
+        game.friendCard = null;
+        game.friend = choice.seat;
+        game.friendRevealed = false;
+        await showMessage(`프렌드: ${game.playerNames[choice.seat]} (사람 지정)`, 1800);
+      } else if (choice.type === 'first') {
+        game.friendType = 'first';
+        await showMessage('프렌드: 초구 승리자', 1800);
+      } else {
+        game.friendType = 'none';
+        game.friend = -1;
+        await showMessage('노프렌드!', 1800);
+      }
+      HostAdapter.broadcastState();
+    }
   } else {
+    // === AI 주공 ===
     await delay(600);
     const choice = game.aiSelectFriend(game.declarer);
     if (choice.type === 'card') {
@@ -2905,6 +3073,7 @@ async function doFriendSelection() {
 
   const friendText = game.friendType === 'card'
     ? (() => { const cc = parseCard(game.friendCard); return cc.isJoker ? '조커' : `${cc.rank}${SUIT_SYMBOLS[cc.suit]}`; })()
+    : game.friendType === 'player' ? `${game.playerNames[game.friend]} (사람 지정)`
     : game.friendType === 'first' ? '초구 프렌드' : '노프렌드';
   await showMessage(`프렌드: ${friendText}`, 1600);
   updateNameTags();

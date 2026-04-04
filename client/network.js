@@ -16,39 +16,36 @@ const Network = {
   connect(serverUrl) {
     return new Promise((resolve, reject) => {
       if (this.socket) { resolve(); return; }
-      // Load socket.io client from server
-      const script = document.createElement('script');
-      script.src = serverUrl + '/socket.io/socket.io.js';
-      script.onload = () => {
-        this.socket = io(serverUrl);
-        this.socket.on('connect', () => {
-          this.connected = true;
-          console.log('[Network] 서버 연결됨');
+      if (typeof io === 'undefined') {
+        reject(new Error('Socket.io 로드 실패: 페이지를 새로고침 해주세요.'));
+        return;
+      }
+      this.socket = io(serverUrl);
+      this.socket.on('connect', () => {
+        this.connected = true;
+        console.log('[Network] 서버 연결됨');
 
-          this.socket.on('player-list', (data) => {
-            if (this.onPlayerList) this.onPlayerList(data.players);
-          });
-          this.socket.on('player-left', (data) => {
-            if (this.onPlayerLeft) this.onPlayerLeft(data);
-          });
-          this.socket.on('game-started', (data) => {
-            if (this.onGameStarted) this.onGameStarted(data);
-          });
-          this.socket.on('game-msg', (data) => {
-            if (this.onGameMsg) this.onGameMsg(data);
-          });
-          this.socket.on('host-disconnected', () => {
-            if (this.onHostDisconnected) this.onHostDisconnected();
-          });
+        this.socket.on('player-list', (data) => {
+          if (this.onPlayerList) this.onPlayerList(data.players);
+        });
+        this.socket.on('player-left', (data) => {
+          if (this.onPlayerLeft) this.onPlayerLeft(data);
+        });
+        this.socket.on('game-started', (data) => {
+          if (this.onGameStarted) this.onGameStarted(data);
+        });
+        this.socket.on('game-msg', (data) => {
+          if (this.onGameMsg) this.onGameMsg(data);
+        });
+        this.socket.on('host-disconnected', () => {
+          if (this.onHostDisconnected) this.onHostDisconnected();
+        });
 
-          resolve();
-        });
-        this.socket.on('connect_error', (err) => {
-          reject(new Error('서버 연결 실패: ' + err.message));
-        });
-      };
-      script.onerror = () => reject(new Error('Socket.io 로드 실패'));
-      document.head.appendChild(script);
+        resolve();
+      });
+      this.socket.on('connect_error', (err) => {
+        reject(new Error('서버 연결 실패: ' + err.message));
+      });
     });
   },
 

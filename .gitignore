@@ -1,2 +1,6 @@
 node_modules/
 .env
+dist/
+MightyOnline-win32-x64/
+package-lock.json
+server/package-lock.json

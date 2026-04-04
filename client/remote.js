@@ -194,22 +194,71 @@ const RemoteAdapter = {
   },
 
   async handleTrumpChangeRequest(payload) {
+    const currentTrump = payload.currentTrump || 'spades';
+    const currentBidNum = payload.currentBidNum || 13;
     const result = await new Promise(resolve => {
-      const html = `
-        <h2>기루다 변경</h2>
-        <p style="text-align:center">기루다를 변경하시겠습니까?<br><small style="color:#aaa">변경 시 공약 수가 올라갑니다</small></p>
-        <div class="btn-row">
-          <button class="btn" id="keep-trump">유지</button>
-          ${SUITS.map(s => `<button class="btn" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
-          <button class="btn" data-newsuit="notrump" style="color:#FFD700">NT</button>
-        </div>`;
-      const modal = showModal(html);
-      modal.querySelector('#keep-trump').addEventListener('click', () => { removeModal(modal); resolve(null); });
-      modal.querySelectorAll('[data-newsuit]').forEach(btn => {
-        btn.addEventListener('click', () => { removeModal(modal); resolve(btn.dataset.newsuit); });
-      });
+      let newTrump = currentTrump;
+      let newBidNum = currentBidNum;
+      let modal = null;
+
+      function renderTrumpBid() {
+        const trumpText = newTrump === 'notrump' ? 'NT' : SUIT_SYMBOLS[newTrump];
+        const trumpColor = newTrump === 'notrump' ? '#FFD700' : SUIT_COLORS[newTrump];
+        const html = `
+          <h2>기루다 / 공약 변경</h2>
+          <p style="text-align:center;font-size:20px;margin:10px 0">
+            현재: <span style="color:${trumpColor};font-weight:bold">${newBidNum} ${trumpText}</span>
+          </p>
+          <p style="text-align:center;color:#aaa;font-size:13px;margin-bottom:10px">기루다 변경 시 공약이 자동으로 올라갑니다</p>
+          <div style="text-align:center;margin-bottom:12px">
+            <span style="color:#aaa;font-size:13px">기루다 선택</span><br>
+            <div class="btn-row" style="margin-top:6px">
+              ${SUITS.map(s => `<button class="btn ${newTrump === s ? 'primary' : ''}" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
+              <button class="btn ${newTrump === 'notrump' ? 'primary' : ''}" data-newsuit="notrump" style="color:#FFD700">NT</button>
+            </div>
+          </div>
+          <div style="text-align:center;margin-bottom:14px">
+            <span style="color:#aaa;font-size:13px">공약 추가</span><br>
+            <div class="btn-row" style="margin-top:6px">
+              <button class="btn" id="bid-down" ${newBidNum <= currentBidNum ? 'disabled' : ''}>-</button>
+              <span style="font-size:24px;font-weight:bold;color:#FFD700;min-width:50px;display:inline-block">${newBidNum}</span>
+              <button class="btn" id="bid-up" ${newBidNum >= 20 ? 'disabled' : ''}>+</button>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="confirm-trump-bid">확인</button>
+          </div>`;
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+
+        modal.querySelectorAll('[data-newsuit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const suit = btn.dataset.newsuit;
+            if (suit !== currentTrump) {
+              if (currentTrump !== 'notrump' && suit === 'notrump') {
+                newBidNum = Math.max(newBidNum, currentBidNum + 1);
+              } else if (suit !== newTrump) {
+                newBidNum = Math.max(newBidNum, currentBidNum + 2);
+              }
+            }
+            newTrump = suit;
+            renderTrumpBid();
+          });
+        });
+        modal.querySelector('#bid-up')?.addEventListener('click', () => {
+          if (newBidNum < 20) { newBidNum++; renderTrumpBid(); }
+        });
+        modal.querySelector('#bid-down')?.addEventListener('click', () => {
+          if (newBidNum > currentBidNum) { newBidNum--; renderTrumpBid(); }
+        });
+        modal.querySelector('#confirm-trump-bid').addEventListener('click', () => {
+          removeModal(modal);
+          resolve({ newTrump: newTrump !== currentTrump ? newTrump : null, newBidNum });
+        });
+      }
+      renderTrumpBid();
     });
-    Network.sendToHost('trump-change-response', { newTrump: result });
+    Network.sendToHost('trump-change-response', result);
   },
 
   async handleFriendRequest(payload) {
@@ -236,8 +285,17 @@ const RemoteAdapter = {
             <p style="font-size:22px;color:#FFD700;font-weight:bold">선택: ${previewText}</p>
             <div class="btn-row">
               <button class="btn primary" id="friend-card-confirm">카드 지정</button>
+              <button class="btn" id="friend-mighty" style="color:#FFD700">👑 마이티</button>
+              <button class="btn" id="friend-joker" style="color:#e040fb">🃏 조커</button>
+              <button class="btn" id="friend-player-show" style="color:#4FC3F7">👤 사람 지정</button>
               <button class="btn" id="friend-first">초구 프렌드</button>
               <button class="btn" id="friend-none">노프렌드</button>
+            </div>
+            <div id="friend-player-list" style="display:none;margin-top:10px">
+              <p style="color:#aaa;font-size:13px;margin-bottom:6px;text-align:center">프렌드로 지정할 플레이어를 선택하세요</p>
+              ${game.playerNames.map((name, i) => i !== Network.mySeat ?
+                `<button class="btn" data-fplayer="${i}" style="margin:3px;min-width:120px">${name}</button>` : ''
+              ).join('')}
             </div>
           </div>`;
         if (modal) removeModal(modal);
@@ -251,6 +309,24 @@ const RemoteAdapter = {
         modal.querySelector('#friend-card-confirm').addEventListener('click', () => {
           removeModal(modal);
           resolve({ type: 'card', suit: selectedSuit, rank: selectedRank });
+        });
+        modal.querySelector('#friend-mighty').addEventListener('click', () => {
+          removeModal(modal);
+          resolve({ type: 'card', isMighty: true });
+        });
+        modal.querySelector('#friend-joker').addEventListener('click', () => {
+          removeModal(modal);
+          resolve({ type: 'card', isJoker: true });
+        });
+        modal.querySelector('#friend-player-show').addEventListener('click', () => {
+          const list = modal.querySelector('#friend-player-list');
+          list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        });
+        modal.querySelectorAll('[data-fplayer]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            removeModal(modal);
+            resolve({ type: 'player', seat: parseInt(btn.dataset.fplayer) });
+          });
         });
         modal.querySelector('#friend-first').addEventListener('click', () => {
           removeModal(modal); resolve({ type: 'first' });

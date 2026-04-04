@@ -28,13 +28,30 @@ const Lobby = {
         <p id="lobby-error" style="color:#f44336;font-size:14px;margin-top:10px;display:none"></p>
       </div>
       <div id="lobby-room" style="display:none">
-        <div style="text-align:center;margin-bottom:16px">
+        <div style="text-align:center;margin-bottom:12px">
           <span style="color:#aaa;font-size:14px">방 코드</span><br>
           <span id="lobby-room-code" style="font-size:36px;color:#FFD700;letter-spacing:8px;font-weight:bold"></span>
         </div>
-        <div id="lobby-player-list" style="margin:16px 0"></div>
+
+        <div id="lobby-server-box" style="background:rgba(0,150,255,0.15);border:2px solid rgba(0,150,255,0.5);border-radius:12px;padding:14px 18px;margin:12px 0;text-align:center">
+          <div style="color:#4FC3F7;font-size:14px;font-weight:bold;margin-bottom:8px">친구에게 아래 주소와 방 코드를 알려주세요!</div>
+          <div id="lobby-addr-loading" style="color:#888;font-size:14px">접속 주소 생성 중...</div>
+          <div id="lobby-addr-result" style="display:none">
+            <div id="lobby-addr-internet" style="display:none;margin-bottom:6px">
+              <span style="color:#aaa;font-size:12px">인터넷 접속:</span><br>
+              <span id="lobby-addr-internet-url" style="font-size:20px;color:#4FC3F7;font-weight:bold;cursor:pointer;word-break:break-all" onclick="Lobby.copyAddr(this)"></span>
+            </div>
+            <div id="lobby-addr-lan" style="margin-bottom:4px">
+              <span style="color:#aaa;font-size:12px">같은 Wi-Fi 접속:</span><br>
+              <span id="lobby-addr-lan-url" style="font-size:16px;color:#81C784;font-weight:bold;cursor:pointer" onclick="Lobby.copyAddr(this)"></span>
+            </div>
+            <div style="color:#666;font-size:11px;margin-top:6px">주소를 클릭하면 복사됩니다</div>
+          </div>
+        </div>
+
+        <div id="lobby-player-list" style="margin:12px 0"></div>
         <p style="text-align:center;color:#888;font-size:13px" id="lobby-ai-note"></p>
-        <div class="btn-row" style="margin-top:16px">
+        <div class="btn-row" style="margin-top:12px">
           <button class="btn primary" id="lobby-start" style="display:none">게임 시작</button>
           <button class="btn" id="lobby-leave">나가기</button>
         </div>
@@ -58,6 +75,19 @@ const Lobby = {
     document.getElementById('lobby-leave').onclick = () => this.leave();
   },
 
+  copyAddr(el) {
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      const orig = el.style.color;
+      el.style.color = '#FFD700';
+      el.textContent = 'Copied!';
+      setTimeout(() => {
+        el.style.color = orig;
+        // restore URL from data attribute
+        el.textContent = el.dataset.url || '';
+      }, 1000);
+    });
+  },
+
   showError(msg) {
     const el = document.getElementById('lobby-error');
     el.textContent = msg;
@@ -72,6 +102,7 @@ const Lobby = {
       const res = await Network.createRoom(name);
       this.showRoom(res.code, true);
       this.setupNetworkHandlers();
+      this.fetchServerInfo();
     } catch (e) {
       this.showError(e.message);
     }
@@ -96,6 +127,12 @@ const Lobby = {
     document.getElementById('lobby-main').style.display = 'none';
     document.getElementById('lobby-room').style.display = 'block';
     document.getElementById('lobby-room-code').textContent = code;
+
+    // 참가자는 서버 주소 박스 숨기기
+    if (!isHost) {
+      document.getElementById('lobby-server-box').style.display = 'none';
+    }
+
     if (isHost) {
       document.getElementById('lobby-start').style.display = 'inline-block';
       document.getElementById('lobby-start').onclick = () => this.startGame();
@@ -162,6 +199,53 @@ const Lobby = {
         players: data.players
       });
     }
+  },
+
+  async fetchServerInfo() {
+    const loading = document.getElementById('lobby-addr-loading');
+    const result = document.getElementById('lobby-addr-result');
+    const internetDiv = document.getElementById('lobby-addr-internet');
+    const internetUrl = document.getElementById('lobby-addr-internet-url');
+    const lanDiv = document.getElementById('lobby-addr-lan');
+    const lanUrl = document.getElementById('lobby-addr-lan-url');
+    if (!loading || !result) return;
+
+    for (let attempt = 0; attempt < 15; attempt++) {
+      try {
+        const res = await fetch('/api/server-info');
+        const info = await res.json();
+
+        // LAN 주소 즉시 표시
+        if (info.addresses && info.addresses.length > 0) {
+          const lanAddr = `http://${info.addresses[0]}:${info.port}`;
+          lanUrl.textContent = lanAddr;
+          lanUrl.dataset.url = lanAddr;
+          lanDiv.style.display = 'block';
+          loading.style.display = 'none';
+          result.style.display = 'block';
+        }
+
+        // 터널 URL 있으면 표시하고 종료
+        if (info.tunnelUrl) {
+          internetUrl.textContent = info.tunnelUrl;
+          internetUrl.dataset.url = info.tunnelUrl;
+          internetDiv.style.display = 'block';
+          loading.style.display = 'none';
+          result.style.display = 'block';
+          return;
+        }
+      } catch (e) { /* ignore */ }
+
+      // 터널 생성 대기
+      if (attempt < 14) {
+        loading.textContent = `인터넷 주소 생성 중... (${attempt + 1}/15)`;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+
+    // 15번 시도 후에도 터널 없으면 LAN만 표시
+    loading.style.display = 'none';
+    result.style.display = 'block';
   },
 
   leave() {
