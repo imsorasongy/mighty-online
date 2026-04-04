@@ -32,6 +32,16 @@ let tunnelUrl = null;
 
 // API: 서버 접속 주소 반환
 app.get('/api/server-info', (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // 프로덕션(클라우드): 요청의 호스트로부터 공개 URL 생성
+  if (isProduction) {
+    const publicUrl = process.env.RENDER_EXTERNAL_URL || `https://${req.get('host')}`;
+    res.json({ publicUrl });
+    return;
+  }
+
+  // 로컬: LAN IP + 터널 URL
   const addresses = [];
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {

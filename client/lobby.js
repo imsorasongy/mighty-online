@@ -215,7 +215,18 @@ const Lobby = {
         const res = await fetch('/api/server-info');
         const info = await res.json();
 
-        // LAN 주소 즉시 표시
+        // 클라우드(프로덕션): 공개 URL 바로 표시
+        if (info.publicUrl) {
+          internetUrl.textContent = info.publicUrl;
+          internetUrl.dataset.url = info.publicUrl;
+          internetDiv.style.display = 'block';
+          lanDiv.style.display = 'none';
+          loading.style.display = 'none';
+          result.style.display = 'block';
+          return;
+        }
+
+        // 로컬: LAN 주소 즉시 표시
         if (info.addresses && info.addresses.length > 0) {
           const lanAddr = `http://${info.addresses[0]}:${info.port}`;
           lanUrl.textContent = lanAddr;
