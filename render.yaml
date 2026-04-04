@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: mighty-online
+    runtime: node
+    buildCommand: cd server && npm install
+    startCommand: node server/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production

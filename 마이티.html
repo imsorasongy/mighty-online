@@ -1,0 +1,3340 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마이티 (Mighty)</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: radial-gradient(ellipse at center, #1a5c2a 0%, #0e3d18 50%, #082610 100%);
+  color: #f0f0f0;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  user-select: none;
+}
+
+#game-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  /* Felt texture overlay */
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+}
+
+/* Top bar */
+#top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 52px;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 100;
+  border-bottom: 2px solid rgba(255,215,0,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+#top-bar .logo { font-size: 26px; font-weight: bold; color: #FFD700; letter-spacing: 3px; text-shadow: 0 0 10px rgba(255,215,0,0.5); }
+#top-bar .info { font-size: 15px; color: #ccc; }
+
+/* Trump indicator */
+#trump-indicator {
+  position: absolute;
+  top: 62px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  border: 2px solid rgba(255,215,0,0.5);
+  border-radius: 10px;
+  padding: 8px 22px;
+  font-size: 17px;
+  font-weight: bold;
+  z-index: 90;
+  display: none;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+#trump-indicator.visible { display: flex; align-items: center; gap: 10px; }
+
+/* Player positions */
+.player-area {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+}
+.player-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid #555;
+  background: #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+.player-avatar.active-turn {
+  border-color: #FFD700;
+  box-shadow: 0 0 18px rgba(255,215,0,0.5);
+  animation: glowPulse 1s infinite;
+}
+@keyframes glowPulse { 0%,100% { box-shadow: 0 0 12px rgba(255,215,0,0.4); } 50% { box-shadow: 0 0 24px rgba(255,215,0,0.8); } }
+
+.player-area .name-tag {
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 8px;
+  padding: 5px 14px;
+  font-size: 15px;
+  font-weight: bold;
+  white-space: nowrap;
+  margin-bottom: 3px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+.player-area .name-tag.declarer { border-color: #FFD700; color: #FFD700; }
+.player-area .name-tag.friend-revealed { border-color: #00bfff; color: #00bfff; }
+.player-area .score-display {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ddd;
+  margin-top: 2px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
+/* Player 0 (bottom, human) */
+#player-0 { bottom: 10px; left: 50%; transform: translateX(-50%); }
+/* Player 1 (left) */
+#player-1 { left: 40px; top: 50%; transform: translateY(-50%); }
+/* Player 2 (top-left) */
+#player-2 { left: 22%; top: 62px; }
+/* Player 3 (top-right) */
+#player-3 { right: 22%; top: 62px; }
+/* Player 4 (right) */
+#player-4 { right: 40px; top: 50%; transform: translateY(-50%); }
+
+/* Hand cards */
+#hand-container {
+  position: absolute;
+  bottom: 65px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  z-index: 50;
+}
+.hand-card {
+  width: 80px;
+  height: 116px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.15s, margin-top 0.15s, box-shadow 0.15s;
+  margin-left: -20px;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.hand-card:first-child { margin-left: 0; }
+.hand-card:hover { transform: translateY(-16px); z-index: 60; box-shadow: 0 6px 20px rgba(255,215,0,0.4); }
+.hand-card.selected { transform: translateY(-24px); box-shadow: 0 8px 24px rgba(255,215,0,0.6); }
+.hand-card.disabled { opacity: 0.4; cursor: not-allowed; }
+.hand-card.disabled:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+
+/* AI hand (face-down cards) */
+.ai-hand {
+  display: flex;
+}
+
+/* Center play area */
+#play-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 380px;
+  height: 300px;
+  z-index: 20;
+  /* Subtle inner circle */
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.04) 0%, transparent 70%);
+}
+.played-card-slot {
+  position: absolute;
+  width: 72px;
+  height: 104px;
+}
+#slot-0 { bottom: 10px; left: 50%; transform: translateX(-50%); }
+#slot-1 { left: 20px; top: 50%; transform: translateY(-50%); }
+#slot-2 { top: 10px; left: 30%; transform: translateX(-50%); }
+#slot-3 { top: 10px; right: 30%; transform: translateX(50%); }
+#slot-4 { right: 20px; top: 50%; transform: translateY(-50%); }
+
+.played-card {
+  width: 72px;
+  height: 104px;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.7);
+  animation: cardPlay 0.25s ease-out;
+}
+@keyframes cardPlay {
+  from { transform: scale(0.3) rotate(-10deg); opacity: 0; }
+  to { transform: scale(1) rotate(0); opacity: 1; }
+}
+
+/* Point counter */
+#point-counter {
+  position: absolute;
+  top: 62px;
+  right: 20px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 90;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+#point-counter.visible { display: block; }
+
+/* Trick counter */
+#trick-counter {
+  position: absolute;
+  top: 62px;
+  left: 20px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 16px;
+  font-weight: bold;
+  z-index: 90;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+#trick-counter.visible { display: block; }
+
+/* Dialog / Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(4px);
+}
+.modal {
+  background: linear-gradient(135deg, #1a2a1a, #0f1f0f);
+  border: 2px solid rgba(255,215,0,0.4);
+  border-radius: 16px;
+  padding: 28px 36px;
+  max-width: 560px;
+  min-width: 340px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.1);
+}
+.modal h2 {
+  color: #FFD700;
+  font-size: 22px;
+  margin-bottom: 18px;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(255,215,0,0.3);
+}
+.modal p { font-size: 16px; margin-bottom: 14px; line-height: 1.5; }
+.modal .btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.btn {
+  padding: 10px 24px;
+  border: 2px solid #555;
+  background: #1a2a1a;
+  color: #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  transition: all 0.15s;
+}
+.btn:hover { background: #2a4a2a; border-color: #FFD700; color: #FFD700; }
+.btn.active { background: #2a4a2a; border-color: #FFD700; color: #FFD700; }
+.btn.primary { background: #FFD700; color: #0d1a0d; border-color: #FFD700; font-weight: bold; }
+.btn.primary:hover { background: #ffec80; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Bid display */
+.bid-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.suit-select {
+  display: flex;
+  gap: 10px;
+}
+.suit-btn {
+  width: 50px;
+  height: 50px;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #444;
+  border-radius: 10px;
+  background: #1a2a1a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.suit-btn:hover, .suit-btn.active { border-color: #FFD700; background: #2a4a2a; }
+.bid-number {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 32px;
+  font-weight: bold;
+  color: #FFD700;
+}
+.bid-number .btn { font-size: 22px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+
+/* Card in modal */
+.card-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+/* Friend select suit/rank pickers */
+.friend-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.rank-select {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.rank-btn {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #444;
+  border-radius: 8px;
+  background: #1a2a1a;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.rank-btn:hover, .rank-btn.active { border-color: #FFD700; color: #FFD700; background: #2a4a2a; }
+
+/* Score overlay */
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+}
+.score-table th, .score-table td {
+  padding: 8px 14px;
+  text-align: center;
+  border-bottom: 1px solid #333;
+  font-size: 16px;
+}
+.score-table th { color: #FFD700; font-size: 17px; }
+.score-positive { color: #4caf50; font-weight: bold; }
+.score-negative { color: #f44336; font-weight: bold; }
+
+/* Message area */
+#message-area {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.9);
+  border: 2px solid #FFD700;
+  border-radius: 14px;
+  padding: 18px 36px;
+  font-size: 20px;
+  font-weight: bold;
+  color: #FFD700;
+  z-index: 150;
+  display: none;
+  text-align: center;
+  pointer-events: none;
+  animation: fadeIn 0.3s ease;
+  text-shadow: 0 0 10px rgba(255,215,0,0.4);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+}
+@keyframes fadeIn { from { opacity: 0; transform: translate(-50%,-50%) scale(0.9); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+
+/* Joker call button */
+#joker-call-btn {
+  position: absolute;
+  bottom: 190px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  display: none;
+  padding: 12px 28px;
+  background: #b71c1c;
+  border: 3px solid #f44336;
+  color: white;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  animation: pulse 1s infinite;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+@keyframes pulse { 0%,100% { box-shadow: 0 0 14px rgba(244,67,54,0.5); } 50% { box-shadow: 0 0 30px rgba(244,67,54,0.8); } }
+
+/* Scoreboard sidebar */
+#scoreboard {
+  position: absolute;
+  bottom: 14px;
+  right: 14px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 15px;
+  z-index: 80;
+  min-width: 170px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+#scoreboard h3 { color: #FFD700; font-size: 16px; margin-bottom: 8px; text-shadow: 0 0 6px rgba(255,215,0,0.3); }
+#scoreboard .sb-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 14px; font-weight: bold; }
+.sb-avatar { font-size: 16px; margin-right: 4px; }
+
+canvas.card-canvas { image-rendering: auto; }
+
+/* Won point cards display */
+.won-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 4px;
+  max-width: 260px;
+  justify-content: center;
+}
+.won-cards .won-card {
+  width: 44px;
+  height: 64px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  transition: opacity 0.3s;
+}
+
+/* BGM toggle */
+#bgm-btn {
+  position: absolute;
+  top: 62px;
+  right: 180px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #ccc;
+  cursor: pointer;
+  z-index: 90;
+  transition: all 0.15s;
+}
+#bgm-btn:hover, #sfx-btn:hover { border-color: #FFD700; color: #FFD700; }
+#bgm-btn.on, #sfx-btn.on { border-color: #4caf50; color: #4caf50; }
+#sfx-btn {
+  position: absolute;
+  top: 62px;
+  right: 290px;
+  background: rgba(0,0,0,0.8);
+  border: 2px solid #555;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 15px;
+  font-weight: bold;
+  color: #ccc;
+  cursor: pointer;
+  z-index: 90;
+  transition: all 0.15s;
+}
+
+/* ====== Title Screen ====== */
+#title-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at center, #1a5c2a 0%, #0e3d18 50%, #061a0a 100%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+#title-screen .cards-deco {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+#title-screen .deco-card {
+  position: absolute;
+  width: 100px;
+  height: 145px;
+  border-radius: 10px;
+  opacity: 0.15;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+#title-screen .title-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+#title-screen h1 {
+  font-size: 96px;
+  font-weight: 900;
+  color: #FFD700;
+  letter-spacing: 12px;
+  text-shadow: 0 0 40px rgba(255,215,0,0.5), 0 4px 8px rgba(0,0,0,0.6);
+  margin-bottom: 8px;
+  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+@keyframes titleGlow {
+  from { text-shadow: 0 0 30px rgba(255,215,0,0.4), 0 4px 8px rgba(0,0,0,0.6); }
+  to { text-shadow: 0 0 60px rgba(255,215,0,0.7), 0 4px 8px rgba(0,0,0,0.6); }
+}
+#title-screen .subtitle {
+  font-size: 22px;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 6px;
+  margin-bottom: 60px;
+}
+#title-screen .menu-btn {
+  display: block;
+  width: 280px;
+  margin: 0 auto 16px auto;
+  padding: 16px 0;
+  background: rgba(0,0,0,0.5);
+  border: 2px solid rgba(255,215,0,0.4);
+  border-radius: 12px;
+  color: #e0e0e0;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 2px;
+}
+#title-screen .menu-btn:hover {
+  background: rgba(255,215,0,0.15);
+  border-color: #FFD700;
+  color: #FFD700;
+  transform: scale(1.04);
+  box-shadow: 0 0 24px rgba(255,215,0,0.3);
+}
+#title-screen .footer {
+  position: absolute;
+  bottom: 24px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 1px;
+}
+/* Title sub-modal (만든 사람들, 다인플레이 안내) */
+#title-screen .sub-panel {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.85);
+  border: 2px solid rgba(255,215,0,0.4);
+  border-radius: 16px;
+  padding: 36px 48px;
+  z-index: 10;
+  text-align: center;
+  display: none;
+  min-width: 320px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+}
+#title-screen .sub-panel.visible { display: block; }
+#title-screen .sub-panel h2 {
+  color: #FFD700;
+  font-size: 24px;
+  margin-bottom: 16px;
+}
+#title-screen .sub-panel p {
+  font-size: 17px;
+  color: #ccc;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+#title-screen .sub-panel .close-btn {
+  padding: 10px 32px;
+  background: rgba(255,215,0,0.15);
+  border: 2px solid #FFD700;
+  color: #FFD700;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+#title-screen .sub-panel .close-btn:hover {
+  background: #FFD700;
+  color: #0d1a0d;
+}
+</style>
+</head>
+<body>
+
+<!-- ====== TITLE SCREEN ====== -->
+<div id="title-screen">
+  <div class="cards-deco" id="title-cards"></div>
+  <div class="title-content">
+    <h1>MIGHTY</h1>
+    <div class="subtitle">추억의 카드게임</div>
+    <button class="menu-btn" id="btn-solo">1인 플레이 시작</button>
+    <button class="menu-btn" id="btn-multi">다인 플레이 시작</button>
+    <button class="menu-btn" id="btn-credits">만든 사람들</button>
+  </div>
+  <div class="sub-panel" id="panel-multi">
+    <h2>다인 플레이</h2>
+    <p>아직 다인플레이 기능은<br>제공하지 않습니다.</p>
+    <button class="close-btn" onclick="document.getElementById('panel-multi').classList.remove('visible')">확인</button>
+  </div>
+  <div class="sub-panel" id="panel-credits">
+    <h2>만든 사람들</h2>
+    <p style="font-size: 28px; color: #FFD700; margin: 20px 0;">박대영</p>
+    <p style="font-size: 14px; color: #888;">Powered by Web Audio API</p>
+    <button class="close-btn" onclick="document.getElementById('panel-credits').classList.remove('visible')">확인</button>
+  </div>
+  <div class="footer">Card Game Since 1970s</div>
+</div>
+
+<div id="game-container" style="display:none">
+  <div id="top-bar">
+    <div class="logo">MIGHTY</div>
+    <div class="info" id="game-info">5인 마이티</div>
+  </div>
+
+  <button id="sfx-btn" class="on" onclick="SFX.toggle()">효과음 ON</button>
+  <button id="bgm-btn" onclick="BGM.toggle()">BGM OFF</button>
+
+  <div id="trump-indicator"><span>기루다:</span> <span id="trump-display"></span></div>
+  <div id="trick-counter">트릭: <span id="trick-num">0</span>/10</div>
+  <div id="point-counter">
+    <div>여당: <span id="ruling-points" style="color:#FFD700">0</span></div>
+    <div>야당: <span id="oppo-points" style="color:#00bfff">0</span></div>
+    <div style="margin-top:6px;color:#aaa">공약: <span id="bid-display-side" style="color:#fff">-</span></div>
+  </div>
+
+  <!-- Player areas -->
+  <div class="player-area" id="player-0">
+    <div class="name-tag" id="name-0">나</div>
+    <div class="score-display" id="total-0">지지율 20%</div>
+    <div class="won-cards" id="won-0"></div>
+  </div>
+  <div class="player-area" id="player-1">
+    <div class="player-avatar" id="avatar-1"></div>
+    <div class="ai-hand" id="ai-hand-1"></div>
+    <div class="name-tag" id="name-1">트럼프</div>
+    <div class="score-display" id="total-1">지지율 20%</div>
+    <div class="won-cards" id="won-1"></div>
+  </div>
+  <div class="player-area" id="player-2">
+    <div class="player-avatar" id="avatar-2"></div>
+    <div class="ai-hand" id="ai-hand-2"></div>
+    <div class="name-tag" id="name-2">시진핑</div>
+    <div class="score-display" id="total-2">지지율 20%</div>
+    <div class="won-cards" id="won-2"></div>
+  </div>
+  <div class="player-area" id="player-3">
+    <div class="player-avatar" id="avatar-3"></div>
+    <div class="ai-hand" id="ai-hand-3"></div>
+    <div class="name-tag" id="name-3">푸틴</div>
+    <div class="score-display" id="total-3">지지율 20%</div>
+    <div class="won-cards" id="won-3"></div>
+  </div>
+  <div class="player-area" id="player-4">
+    <div class="player-avatar" id="avatar-4"></div>
+    <div class="ai-hand" id="ai-hand-4"></div>
+    <div class="name-tag" id="name-4">김정은</div>
+    <div class="score-display" id="total-4">지지율 20%</div>
+    <div class="won-cards" id="won-4"></div>
+  </div>
+
+  <!-- Play area -->
+  <div id="play-area">
+    <div class="played-card-slot" id="slot-0"></div>
+    <div class="played-card-slot" id="slot-1"></div>
+    <div class="played-card-slot" id="slot-2"></div>
+    <div class="played-card-slot" id="slot-3"></div>
+    <div class="played-card-slot" id="slot-4"></div>
+  </div>
+
+  <!-- Hand -->
+  <div id="hand-container"></div>
+
+  <!-- Joker call button -->
+  <button id="joker-call-btn" onclick="game.doJokerCall()">조커콜!</button>
+
+  <!-- Message -->
+  <div id="message-area"></div>
+
+  <!-- Scoreboard -->
+  <div id="scoreboard">
+    <h3>지지율</h3>
+    <div id="sb-rows"></div>
+  </div>
+</div>
+
+<script>
+// ==================== AVATAR RENDERING ====================
+// Draw caricature-style faces on canvas for each leader
+function drawAvatar(canvasOrId, type) {
+  let canvas;
+  if (typeof canvasOrId === 'string') {
+    const container = document.getElementById(canvasOrId);
+    canvas = document.createElement('canvas');
+    canvas.width = 60;
+    canvas.height = 60;
+    container.innerHTML = '';
+    container.appendChild(canvas);
+  } else {
+    canvas = canvasOrId;
+  }
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Common face base
+  function drawFace(skinColor, hairColor) {
+    // Head
+    ctx.fillStyle = skinColor;
+    ctx.beginPath();
+    ctx.arc(w/2, h/2 + 4, 22, 0, Math.PI * 2);
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath();
+    ctx.ellipse(w/2 - 7, h/2 + 1, 2.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(w/2 + 7, h/2 + 1, 2.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Eye whites
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(w/2 - 7, h/2, 1.2, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(w/2 + 7, h/2, 1.2, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  switch(type) {
+    case 'trump': {
+      drawFace('#fcd5b0', '#f5c542');
+      // Trump's iconic hair - big golden swoosh
+      ctx.fillStyle = '#f0b830';
+      ctx.beginPath();
+      ctx.moveTo(8, h/2 - 8);
+      ctx.quadraticCurveTo(w/2, h/2 - 30, w - 4, h/2 - 12);
+      ctx.quadraticCurveTo(w - 2, h/2 - 4, w/2 + 14, h/2 - 8);
+      ctx.quadraticCurveTo(w/2, h/2 - 18, w/2 - 14, h/2 - 8);
+      ctx.quadraticCurveTo(12, h/2 - 2, 8, h/2 - 8);
+      ctx.fill();
+      // More hair volume
+      ctx.fillStyle = '#e0a020';
+      ctx.beginPath();
+      ctx.moveTo(10, h/2 - 6);
+      ctx.quadraticCurveTo(w/2, h/2 - 26, w - 6, h/2 - 10);
+      ctx.quadraticCurveTo(w/2 + 10, h/2 - 14, w/2, h/2 - 16);
+      ctx.quadraticCurveTo(w/2 - 10, h/2 - 14, 10, h/2 - 6);
+      ctx.fill();
+      // Mouth (smirk)
+      ctx.strokeStyle = '#c0392b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(w/2, h/2 + 12, 7, 0.1, Math.PI - 0.1);
+      ctx.stroke();
+      // Orange tint
+      ctx.fillStyle = 'rgba(255, 160, 60, 0.15)';
+      ctx.beginPath();
+      ctx.arc(w/2, h/2 + 4, 22, 0, Math.PI * 2);
+      ctx.fill();
+      // Eyebrows (angry/confident)
+      ctx.strokeStyle = '#c89020';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 12, h/2 - 6);
+      ctx.lineTo(w/2 - 4, h/2 - 8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w/2 + 4, h/2 - 8);
+      ctx.lineTo(w/2 + 12, h/2 - 6);
+      ctx.stroke();
+      break;
+    }
+    case 'xi': {
+      drawFace('#f5d5a0', '#1a1a1a');
+      // Xi's hair - neat black
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.ellipse(w/2, h/2 - 12, 20, 12, 0, Math.PI, 0);
+      ctx.fill();
+      // Round face emphasis
+      ctx.fillStyle = 'rgba(245, 200, 140, 0.3)';
+      ctx.beginPath();
+      ctx.arc(w/2, h/2 + 6, 20, 0, Math.PI * 2);
+      ctx.fill();
+      // Smile
+      ctx.strokeStyle = '#8b4513';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(w/2, h/2 + 10, 8, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      // Glasses
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.rect(w/2 - 12, h/2 - 4, 10, 8);
+      ctx.rect(w/2 + 2, h/2 - 4, 10, 8);
+      ctx.moveTo(w/2 - 2, h/2);
+      ctx.lineTo(w/2 + 2, h/2);
+      ctx.stroke();
+      // Eyebrows
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 12, h/2 - 7);
+      ctx.lineTo(w/2 - 3, h/2 - 8);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w/2 + 3, h/2 - 8);
+      ctx.lineTo(w/2 + 12, h/2 - 7);
+      ctx.stroke();
+      break;
+    }
+    case 'putin': {
+      drawFace('#f0cfb0', '#c0b090');
+      // Putin - minimal/receding hair
+      ctx.fillStyle = '#b0a080';
+      ctx.beginPath();
+      ctx.ellipse(w/2, h/2 - 14, 16, 8, 0, Math.PI + 0.3, -0.3);
+      ctx.fill();
+      // Stern expression
+      ctx.strokeStyle = '#8b6050';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 6, h/2 + 12);
+      ctx.lineTo(w/2 + 6, h/2 + 12);
+      ctx.stroke();
+      // Piercing eyes - more intense
+      ctx.fillStyle = '#3a7bd5';
+      ctx.beginPath();
+      ctx.arc(w/2 - 7, h/2 + 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(w/2 + 7, h/2 + 1, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(w/2 - 7, h/2 + 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(w/2 + 7, h/2 + 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+      // Strong eyebrows
+      ctx.strokeStyle = '#777';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 12, h/2 - 5);
+      ctx.lineTo(w/2 - 3, h/2 - 7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w/2 + 3, h/2 - 7);
+      ctx.lineTo(w/2 + 12, h/2 - 5);
+      ctx.stroke();
+      break;
+    }
+    case 'kim': {
+      drawFace('#f0d5a8', '#0a0a0a');
+      // Kim's iconic high-top haircut
+      ctx.fillStyle = '#0a0a0a';
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 16, h/2 - 8);
+      ctx.lineTo(w/2 - 14, h/2 - 24);
+      ctx.lineTo(w/2 - 6, h/2 - 26);
+      ctx.lineTo(w/2 + 6, h/2 - 26);
+      ctx.lineTo(w/2 + 14, h/2 - 24);
+      ctx.lineTo(w/2 + 16, h/2 - 8);
+      ctx.quadraticCurveTo(w/2 + 18, h/2 - 4, w/2 + 16, h/2 - 2);
+      ctx.quadraticCurveTo(w/2, h/2 - 10, w/2 - 16, h/2 - 2);
+      ctx.quadraticCurveTo(w/2 - 18, h/2 - 4, w/2 - 16, h/2 - 8);
+      ctx.fill();
+      // Sides trimmed
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.rect(w/2 - 22, h/2 - 4, 6, 12);
+      ctx.rect(w/2 + 16, h/2 - 4, 6, 12);
+      ctx.fill();
+      // Round cheeks
+      ctx.fillStyle = 'rgba(240, 180, 140, 0.4)';
+      ctx.beginPath();
+      ctx.arc(w/2 - 14, h/2 + 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(w/2 + 14, h/2 + 8, 6, 0, Math.PI * 2);
+      ctx.fill();
+      // Smile
+      ctx.strokeStyle = '#8b4513';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(w/2, h/2 + 11, 6, 0.1, Math.PI - 0.1);
+      ctx.stroke();
+      // Eyebrows
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(w/2 - 11, h/2 - 5);
+      ctx.lineTo(w/2 - 3, h/2 - 7);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w/2 + 3, h/2 - 7);
+      ctx.lineTo(w/2 + 11, h/2 - 5);
+      ctx.stroke();
+      break;
+    }
+  }
+}
+
+// Initialize avatars
+window.addEventListener('DOMContentLoaded', () => {
+  drawAvatar('avatar-1', 'trump');
+  drawAvatar('avatar-2', 'xi');
+  drawAvatar('avatar-3', 'putin');
+  drawAvatar('avatar-4', 'kim');
+});
+
+// ==================== SOUND ENGINE (DRAMATIC) ====================
+const SFX = (() => {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let muted = false;
+
+  // Create a compressor for punchier sound
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.setValueAtTime(-24, ctx.currentTime);
+  compressor.knee.setValueAtTime(10, ctx.currentTime);
+  compressor.ratio.setValueAtTime(12, ctx.currentTime);
+  compressor.connect(ctx.destination);
+
+  // Master gain
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(0.8, ctx.currentTime);
+  masterGain.connect(compressor);
+
+  function noise(duration, volume = 0.3) {
+    const bufferSize = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * volume;
+    }
+    return buffer;
+  }
+
+  function play(type) {
+    if (muted) return;
+    ctx.resume();
+    const now = ctx.currentTime;
+
+    switch(type) {
+      case 'deal': {
+        // Punchy card snap - white noise burst + click
+        const noiseNode = ctx.createBufferSource();
+        noiseNode.buffer = noise(0.06, 0.8);
+        const nGain = ctx.createGain();
+        nGain.gain.setValueAtTime(0.5, now);
+        nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        // Bandpass for papery sound
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.setValueAtTime(3000, now);
+        bp.Q.setValueAtTime(1, now);
+        noiseNode.connect(bp);
+        bp.connect(nGain);
+        nGain.connect(masterGain);
+        noiseNode.start(now);
+        noiseNode.stop(now + 0.06);
+
+        // Click component
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.04);
+        g.gain.setValueAtTime(0.4, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.05);
+        break;
+      }
+      case 'play': {
+        // Dramatic card slap - thump + slap noise + resonance
+        // Thump
+        const osc1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(150, now);
+        osc1.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+        g1.gain.setValueAtTime(0.7, now);
+        g1.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc1.connect(g1);
+        g1.connect(masterGain);
+        osc1.start(now);
+        osc1.stop(now + 0.2);
+
+        // Slap noise
+        const slapNoise = ctx.createBufferSource();
+        slapNoise.buffer = noise(0.08, 1.0);
+        const sg = ctx.createGain();
+        sg.gain.setValueAtTime(0.6, now);
+        sg.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(800, now);
+        slapNoise.connect(hp);
+        hp.connect(sg);
+        sg.connect(masterGain);
+        slapNoise.start(now);
+        slapNoise.stop(now + 0.08);
+
+        // Table resonance
+        const osc2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(200, now);
+        osc2.frequency.exponentialRampToValueAtTime(80, now + 0.12);
+        g2.gain.setValueAtTime(0.35, now);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        osc2.connect(g2);
+        g2.connect(masterGain);
+        osc2.start(now);
+        osc2.stop(now + 0.15);
+        break;
+      }
+      case 'shuffle': {
+        // Dramatic riffle shuffle - layered fast clicks with crescendo
+        const totalClicks = 20;
+        for (let i = 0; i < totalClicks; i++) {
+          const t = now + i * 0.03 + Math.random() * 0.01;
+          const vol = 0.2 + (i / totalClicks) * 0.4;
+
+          // Papery noise click
+          const n = ctx.createBufferSource();
+          n.buffer = noise(0.04, 1);
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(vol, t);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+          const bp = ctx.createBiquadFilter();
+          bp.type = 'bandpass';
+          bp.frequency.setValueAtTime(2000 + Math.random() * 3000, t);
+          bp.Q.setValueAtTime(2, t);
+          n.connect(bp);
+          bp.connect(g);
+          g.connect(masterGain);
+          n.start(t);
+          n.stop(t + 0.04);
+
+          // Tonal click
+          const o = ctx.createOscillator();
+          const og = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(500 + Math.random() * 800, t);
+          o.frequency.exponentialRampToValueAtTime(200, t + 0.03);
+          og.gain.setValueAtTime(vol * 0.4, t);
+          og.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+          o.connect(og);
+          og.connect(masterGain);
+          o.start(t);
+          o.stop(t + 0.035);
+        }
+        // Final whoosh
+        const whoosh = ctx.createBufferSource();
+        whoosh.buffer = noise(0.3, 0.8);
+        const wg = ctx.createGain();
+        const endT = now + totalClicks * 0.03;
+        wg.gain.setValueAtTime(0.001, endT);
+        wg.gain.linearRampToValueAtTime(0.35, endT + 0.08);
+        wg.gain.exponentialRampToValueAtTime(0.001, endT + 0.3);
+        const wbp = ctx.createBiquadFilter();
+        wbp.type = 'bandpass';
+        wbp.frequency.setValueAtTime(1500, endT);
+        wbp.frequency.linearRampToValueAtTime(4000, endT + 0.15);
+        wbp.frequency.linearRampToValueAtTime(1000, endT + 0.3);
+        whoosh.connect(wbp);
+        wbp.connect(wg);
+        wg.connect(masterGain);
+        whoosh.start(endT);
+        whoosh.stop(endT + 0.3);
+        break;
+      }
+      case 'win': {
+        // Victory fanfare - layered chord + rising melody
+        const notes = [523, 659, 784, 1047, 1319];
+        notes.forEach((freq, i) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = i < 3 ? 'triangle' : 'square';
+          const t = now + i * 0.12;
+          o.frequency.setValueAtTime(freq, t);
+          g.gain.setValueAtTime(0.001, t);
+          g.gain.linearRampToValueAtTime(0.25, t + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+          o.connect(g);
+          g.connect(masterGain);
+          o.start(t);
+          o.stop(t + 0.5);
+        });
+        // Chord pad
+        [523, 659, 784].forEach(freq => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(freq, now + 0.5);
+          g.gain.setValueAtTime(0.15, now + 0.5);
+          g.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+          o.connect(g);
+          g.connect(masterGain);
+          o.start(now + 0.5);
+          o.stop(now + 1.2);
+        });
+        break;
+      }
+      case 'lose': {
+        // Dramatic loss - descending + dissonant
+        const o1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        o1.type = 'sawtooth';
+        o1.frequency.setValueAtTime(500, now);
+        o1.frequency.exponentialRampToValueAtTime(80, now + 0.8);
+        g1.gain.setValueAtTime(0.3, now);
+        g1.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        o1.connect(g1);
+        g1.connect(masterGain);
+        o1.start(now);
+        o1.stop(now + 0.9);
+
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'square';
+        o2.frequency.setValueAtTime(300, now + 0.1);
+        o2.frequency.exponentialRampToValueAtTime(50, now + 0.9);
+        g2.gain.setValueAtTime(0.15, now + 0.1);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+        o2.connect(g2);
+        g2.connect(masterGain);
+        o2.start(now + 0.1);
+        o2.stop(now + 0.9);
+        break;
+      }
+      case 'bid': {
+        // Clear bell ding
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(1200, now);
+        g.gain.setValueAtTime(0.4, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        o.connect(g);
+        g.connect(masterGain);
+        o.start(now);
+        o.stop(now + 0.35);
+        // Harmonic
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(2400, now);
+        g2.gain.setValueAtTime(0.15, now);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        o2.connect(g2);
+        g2.connect(masterGain);
+        o2.start(now);
+        o2.stop(now + 0.25);
+        break;
+      }
+      case 'joker': {
+        // Dramatic stinger - rising then crash
+        const o1 = ctx.createOscillator();
+        const g1 = ctx.createGain();
+        o1.type = 'sawtooth';
+        o1.frequency.setValueAtTime(150, now);
+        o1.frequency.exponentialRampToValueAtTime(1200, now + 0.2);
+        o1.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+        g1.gain.setValueAtTime(0.4, now);
+        g1.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        o1.connect(g1);
+        g1.connect(masterGain);
+        o1.start(now);
+        o1.stop(now + 0.55);
+
+        // Impact noise
+        const impact = ctx.createBufferSource();
+        impact.buffer = noise(0.15, 1);
+        const ig = ctx.createGain();
+        ig.gain.setValueAtTime(0.001, now);
+        ig.gain.linearRampToValueAtTime(0.5, now + 0.18);
+        ig.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        impact.connect(ig);
+        ig.connect(masterGain);
+        impact.start(now);
+        impact.stop(now + 0.4);
+
+        // Ominous low
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'square';
+        o2.frequency.setValueAtTime(80, now + 0.15);
+        g2.gain.setValueAtTime(0.25, now + 0.15);
+        g2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        o2.connect(g2);
+        g2.connect(masterGain);
+        o2.start(now + 0.15);
+        o2.stop(now + 0.6);
+        break;
+      }
+      case 'trick': {
+        // Sweep collect sound
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(400, now);
+        o.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+        o.frequency.exponentialRampToValueAtTime(600, now + 0.2);
+        g.gain.setValueAtTime(0.35, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        o.connect(g);
+        g.connect(masterGain);
+        o.start(now);
+        o.stop(now + 0.25);
+        // Sweep noise
+        const sn = ctx.createBufferSource();
+        sn.buffer = noise(0.15, 0.6);
+        const sg = ctx.createGain();
+        sg.gain.setValueAtTime(0.3, now);
+        sg.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        const sbp = ctx.createBiquadFilter();
+        sbp.type = 'bandpass';
+        sbp.frequency.setValueAtTime(2000, now);
+        sbp.frequency.exponentialRampToValueAtTime(500, now + 0.15);
+        sn.connect(sbp);
+        sbp.connect(sg);
+        sg.connect(masterGain);
+        sn.start(now);
+        sn.stop(now + 0.15);
+        break;
+      }
+    }
+  }
+
+  function toggle() {
+    muted = !muted;
+    const btn = document.getElementById('sfx-btn');
+    if (muted) {
+      btn.textContent = '효과음 OFF';
+      btn.classList.remove('on');
+    } else {
+      btn.textContent = '효과음 ON';
+      btn.classList.add('on');
+    }
+  }
+
+  return { play, toggle };
+})();
+
+// ==================== BGM ENGINE - Tazza Style Noir Jazz ====================
+const BGM = (() => {
+  let ctx = null;
+  let playing = false;
+  let masterGain = null;
+  let loopTimer = null;
+  let contNodes = []; // continuous oscillator nodes
+
+  function getCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  }
+
+  function cleanup() {
+    if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
+    for (const n of contNodes) { try { n.stop(); } catch(e) {} }
+    contNodes = [];
+    masterGain = null;
+  }
+
+  // Note frequencies
+  const N = {
+    C2:65.41, D2:73.42, Eb2:77.78, E2:82.41, F2:87.31, G2:98.00, Ab2:103.83, A2:110, Bb2:116.54, B2:123.47,
+    C3:130.81, D3:146.83, Eb3:155.56, E3:164.81, F3:174.61, G3:196.00, Ab3:207.65, A3:220, Bb3:233.08, B3:246.94,
+    C4:261.63, D4:293.66, Eb4:311.13, E4:329.63, F4:349.23, G4:392.00, Ab4:415.30, A4:440, Bb4:466.16, B4:493.88,
+    C5:523.25, D5:587.33, Eb5:622.25, E5:659.25
+  };
+
+  const BPM = 130;
+  const beatDur = 60 / BPM; // ~0.46s per beat
+  const barDur = beatDur * 4;
+
+  // Play a single note (piano-like)
+  function playNote(ac, freq, startTime, duration, vol = 0.08, dest = masterGain) {
+    if (!dest) return;
+    // Two detuned oscillators for richness
+    for (let det = -4; det <= 4; det += 8) {
+      const osc = ac.createOscillator();
+      const g = ac.createGain();
+      const filt = ac.createBiquadFilter();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      osc.detune.value = det;
+      filt.type = 'lowpass';
+      filt.frequency.setValueAtTime(freq * 6, startTime);
+      filt.frequency.exponentialRampToValueAtTime(freq * 1.5, startTime + duration * 0.8);
+      g.gain.setValueAtTime(vol, startTime);
+      g.gain.setValueAtTime(vol * 0.7, startTime + duration * 0.3);
+      g.gain.linearRampToValueAtTime(0.001, startTime + duration);
+      osc.connect(filt);
+      filt.connect(g);
+      g.connect(dest);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.05);
+    }
+  }
+
+  // Play a chord (multiple notes)
+  function playChord(ac, freqs, startTime, duration, vol = 0.04, dest = masterGain) {
+    freqs.forEach(f => playNote(ac, f, startTime, duration, vol, dest));
+  }
+
+  // Noise hit (brush/snare)
+  function playBrush(ac, startTime, vol = 0.08, dest = masterGain) {
+    if (!dest) return;
+    const bufSize = ac.sampleRate * 0.06;
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1);
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    const g = ac.createGain();
+    const bp = ac.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 4000;
+    bp.Q.value = 0.8;
+    g.gain.setValueAtTime(vol, startTime);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + 0.07);
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(dest);
+    src.start(startTime);
+    src.stop(startTime + 0.08);
+  }
+
+  // Kick-like low thump
+  function playKick(ac, startTime, vol = 0.15, dest = masterGain) {
+    if (!dest) return;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(100, startTime);
+    osc.frequency.exponentialRampToValueAtTime(40, startTime + 0.12);
+    g.gain.setValueAtTime(vol, startTime);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+    osc.connect(g);
+    g.connect(dest);
+    osc.start(startTime);
+    osc.stop(startTime + 0.2);
+  }
+
+  // Bass note (warm)
+  function playBass(ac, freq, startTime, duration, vol = 0.13, dest = masterGain) {
+    if (!dest) return;
+    const osc = ac.createOscillator();
+    const g = ac.createGain();
+    const filt = ac.createBiquadFilter();
+    osc.type = 'sawtooth';
+    osc.frequency.value = freq;
+    filt.type = 'lowpass';
+    filt.frequency.value = freq * 3;
+    filt.Q.value = 1;
+    g.gain.setValueAtTime(vol, startTime);
+    g.gain.setValueAtTime(vol * 0.6, startTime + duration * 0.5);
+    g.gain.linearRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(filt);
+    filt.connect(g);
+    g.connect(dest);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.05);
+  }
+
+  // ========== Song Structure (Tazza-style loop) ==========
+  // 8-bar loop, Am-ish noir progression
+  // Chords: Am7 | Dm7 | G7 | Cmaj7 | Fmaj7 | Bm7b5 | E7 | Am7
+  const chordProg = [
+    { bass: [N.A2, N.E2, N.A2, N.G2], chord: [N.A3, N.C4, N.E4, N.G4] },       // Am7
+    { bass: [N.D2, N.A2, N.D2, N.F2], chord: [N.D4, N.F4, N.A4, N.C5] },       // Dm7
+    { bass: [N.G2, N.D2, N.G2, N.F2], chord: [N.G3, N.B3, N.D4, N.F4] },       // G7
+    { bass: [N.C2, N.G2, N.C2, N.E2], chord: [N.C4, N.E4, N.G4, N.B4] },       // Cmaj7
+    { bass: [N.F2, N.C2, N.F2, N.E2], chord: [N.F3, N.A3, N.C4, N.E4] },       // Fmaj7
+    { bass: [N.B2, N.F2, N.B2, N.A2], chord: [N.B3, N.D4, N.F4, N.A4] },       // Bm7b5
+    { bass: [N.E2, N.B2, N.E2, N.D2], chord: [N.E3, N.Ab3, N.B3, N.D4] },      // E7
+    { bass: [N.A2, N.E2, N.C2, N.E2], chord: [N.A3, N.C4, N.E4, N.G4] },       // Am7
+  ];
+
+  // Melody fragments (call-and-response, noir style)
+  const melodyBars = [
+    // bar 0: Am7 - opening riff
+    [{ t: 0, n: N.E5, d: 0.5 }, { t: 0.5, n: N.D5, d: 0.3 }, { t: 1, n: N.C5, d: 0.5 }, { t: 2, n: N.B4, d: 0.3 }, { t: 2.5, n: N.A4, d: 1 }],
+    // bar 1: Dm7 - response
+    [{ t: 0.5, n: N.D5, d: 0.4 }, { t: 1, n: N.F4, d: 0.5 }, { t: 2, n: N.A4, d: 0.3 }, { t: 2.5, n: N.G4, d: 0.8 }],
+    // bar 2: G7 - tension
+    [{ t: 0, n: N.B4, d: 0.5 }, { t: 0.5, n: N.D5, d: 0.5 }, { t: 1.5, n: N.F4, d: 0.3 }, { t: 2, n: N.E4, d: 0.3 }, { t: 2.5, n: N.D4, d: 1 }],
+    // bar 3: Cmaj7 - release
+    [{ t: 0, n: N.C5, d: 0.8 }, { t: 1, n: N.E5, d: 0.5 }, { t: 2, n: N.D5, d: 0.3 }, { t: 2.5, n: N.C5, d: 0.8 }],
+    // bar 4: Fmaj7 - smooth
+    [{ t: 0, n: N.A4, d: 0.6 }, { t: 1, n: N.C5, d: 0.4 }, { t: 1.5, n: N.A4, d: 0.3 }, { t: 2.5, n: N.G4, d: 1 }],
+    // bar 5: Bm7b5 - dark
+    [{ t: 0, n: N.B4, d: 0.4 }, { t: 0.5, n: N.A4, d: 0.4 }, { t: 1, n: N.F4, d: 0.8 }, { t: 2.5, n: N.D4, d: 0.8 }],
+    // bar 6: E7 - climax
+    [{ t: 0, n: N.E5, d: 0.3 }, { t: 0.5, n: N.D5, d: 0.3 }, { t: 1, n: N.B4, d: 0.3 }, { t: 1.5, n: N.Ab4, d: 0.5 }, { t: 2.5, n: N.B4, d: 1 }],
+    // bar 7: Am7 - resolve
+    [{ t: 0, n: N.A4, d: 1 }, { t: 1.5, n: N.C5, d: 0.3 }, { t: 2, n: N.B4, d: 0.3 }, { t: 2.5, n: N.A4, d: 1.2 }],
+  ];
+
+  function scheduleLoop(ac, startTime) {
+    for (let bar = 0; bar < 8; bar++) {
+      const barStart = startTime + bar * barDur;
+      const ch = chordProg[bar];
+
+      // Walking bass (4 notes per bar)
+      for (let b = 0; b < 4; b++) {
+        playBass(ac, ch.bass[b], barStart + b * beatDur, beatDur * 0.85, 0.11);
+      }
+
+      // Chord stabs on beats 2 and 4 (jazz comping)
+      playChord(ac, ch.chord, barStart + beatDur * 1, beatDur * 0.6, 0.025);
+      playChord(ac, ch.chord, barStart + beatDur * 3, beatDur * 0.6, 0.03);
+      // Occasional syncopated hit
+      if (bar % 2 === 0) {
+        playChord(ac, ch.chord, barStart + beatDur * 2.5, beatDur * 0.4, 0.02);
+      }
+
+      // Drums: kick on 1 & 3, brush on 2 & 4, ghost brush on &'s
+      playKick(ac, barStart, 0.12);
+      playKick(ac, barStart + beatDur * 2, 0.10);
+      playBrush(ac, barStart + beatDur * 1, 0.07);
+      playBrush(ac, barStart + beatDur * 3, 0.07);
+      // Ghost notes (swing feel)
+      playBrush(ac, barStart + beatDur * 0.5, 0.03);
+      playBrush(ac, barStart + beatDur * 1.5, 0.025);
+      playBrush(ac, barStart + beatDur * 2.5, 0.03);
+      playBrush(ac, barStart + beatDur * 3.5, 0.025);
+
+      // Melody
+      const mel = melodyBars[bar];
+      mel.forEach(note => {
+        playNote(ac, note.n, barStart + note.t * beatDur, note.d * beatDur, 0.055);
+      });
+    }
+  }
+
+  function start() {
+    if (playing) return;
+    const ac = getCtx();
+    ac.resume();
+    cleanup();
+    playing = true;
+
+    masterGain = ac.createGain();
+    masterGain.gain.setValueAtTime(0.001, ac.currentTime);
+    masterGain.gain.linearRampToValueAtTime(0.7, ac.currentTime + 1.5);
+    masterGain.connect(ac.destination);
+
+    // Reverb-like effect using delay
+    const delay1 = ac.createDelay(1);
+    delay1.delayTime.value = 0.12;
+    const fbGain = ac.createGain();
+    fbGain.gain.value = 0.15;
+    const delayFilter = ac.createBiquadFilter();
+    delayFilter.type = 'lowpass';
+    delayFilter.frequency.value = 2000;
+    masterGain.connect(delay1);
+    delay1.connect(delayFilter);
+    delayFilter.connect(fbGain);
+    fbGain.connect(delay1);
+    fbGain.connect(ac.destination);
+
+    const loopDuration = barDur * 8; // 8 bars
+    let nextLoopTime = ac.currentTime + 0.1;
+
+    // Schedule first loop
+    scheduleLoop(ac, nextLoopTime);
+    nextLoopTime += loopDuration;
+
+    // Pre-schedule next loops
+    loopTimer = setInterval(() => {
+      if (!playing) return;
+      const now = ac.currentTime;
+      // Schedule ahead if within 2 seconds of next loop
+      if (nextLoopTime - now < 2) {
+        scheduleLoop(ac, nextLoopTime);
+        nextLoopTime += loopDuration;
+      }
+    }, 500);
+
+    document.getElementById('bgm-btn').textContent = 'BGM ON';
+    document.getElementById('bgm-btn').classList.add('on');
+  }
+
+  function stop() {
+    if (!playing) return;
+    playing = false;
+    if (masterGain) {
+      try {
+        const ac = getCtx();
+        masterGain.gain.cancelScheduledValues(ac.currentTime);
+        masterGain.gain.setValueAtTime(masterGain.gain.value, ac.currentTime);
+        masterGain.gain.linearRampToValueAtTime(0.001, ac.currentTime + 1.0);
+      } catch(e) {}
+    }
+    setTimeout(cleanup, 1100);
+    document.getElementById('bgm-btn').textContent = 'BGM OFF';
+    document.getElementById('bgm-btn').classList.remove('on');
+  }
+
+  function toggle() {
+    const ac = getCtx();
+    ac.resume().then(() => {
+      if (playing) stop();
+      else start();
+    });
+  }
+
+  return { toggle, start, stop };
+})();
+
+// ==================== CARD RENDERING ====================
+const SUITS = ['spades','hearts','diamonds','clubs'];
+const SUIT_SYMBOLS = { spades: '\u2660', hearts: '\u2665', diamonds: '\u2666', clubs: '\u2663' };
+const SUIT_COLORS = { spades: '#1a237e', hearts: '#c62828', diamonds: '#c62828', clubs: '#1b5e20' };
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const RANK_ORDER = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
+
+function cardId(suit, rank) { return suit === 'joker' ? 'joker' : `${rank}_${suit}`; }
+function parseCard(id) {
+  if (id === 'joker') return { suit: 'joker', rank: 'JK', isJoker: true };
+  const [rank, suit] = id.split('_');
+  return { suit, rank, isJoker: false };
+}
+function isPointCard(card) {
+  const c = typeof card === 'string' ? parseCard(card) : card;
+  return ['A','K','Q','J','10'].includes(c.rank);
+}
+
+function renderCard(cardStr, width = 80, height = 116) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.className = 'card-canvas';
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#f5f0e8';
+  ctx.strokeStyle = '#999';
+  ctx.lineWidth = 1;
+  const r = width * 0.08;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(width - r, 0);
+  ctx.quadraticCurveTo(width, 0, width, r);
+  ctx.lineTo(width, height - r);
+  ctx.quadraticCurveTo(width, height, width - r, height);
+  ctx.lineTo(r, height);
+  ctx.quadraticCurveTo(0, height, 0, height - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  const card = parseCard(cardStr);
+
+  if (card.isJoker) {
+    ctx.fillStyle = '#FFD700';
+    ctx.font = `bold ${width * 0.18}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('JOKER', width/2, height * 0.25);
+    ctx.font = `${width * 0.45}px sans-serif`;
+    ctx.fillText('\uD83C\uDCCF', width/2, height * 0.65);
+    return canvas;
+  }
+
+  const color = SUIT_COLORS[card.suit];
+  const sym = SUIT_SYMBOLS[card.suit];
+
+  ctx.fillStyle = color;
+  ctx.font = `bold ${width * 0.22}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText(card.rank, width * 0.08, height * 0.22);
+  ctx.font = `${width * 0.2}px sans-serif`;
+  ctx.fillText(sym, width * 0.08, height * 0.38);
+
+  ctx.textAlign = 'center';
+  ctx.font = `${width * 0.45}px sans-serif`;
+  ctx.fillText(sym, width/2, height * 0.65);
+
+  ctx.save();
+  ctx.translate(width, height);
+  ctx.rotate(Math.PI);
+  ctx.textAlign = 'left';
+  ctx.font = `bold ${width * 0.22}px sans-serif`;
+  ctx.fillText(card.rank, width * 0.08, height * 0.22);
+  ctx.font = `${width * 0.2}px sans-serif`;
+  ctx.fillText(sym, width * 0.08, height * 0.38);
+  ctx.restore();
+
+  return canvas;
+}
+
+function renderCardBack(width = 36, height = 52) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  const r = width * 0.08;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(width - r, 0);
+  ctx.quadraticCurveTo(width, 0, width, r);
+  ctx.lineTo(width, height - r);
+  ctx.quadraticCurveTo(width, height, width - r, height);
+  ctx.lineTo(r, height);
+  ctx.quadraticCurveTo(0, height, 0, height - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#8b0000';
+  ctx.fill();
+  ctx.strokeStyle = '#b22222';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Diamond pattern
+  ctx.strokeStyle = 'rgba(255,215,0,0.2)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < width + height; i += 8) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(0, i);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(width - i, 0);
+    ctx.lineTo(width, i);
+    ctx.stroke();
+  }
+  // Center emblem
+  ctx.fillStyle = 'rgba(255,215,0,0.3)';
+  ctx.beginPath();
+  ctx.arc(width/2, height/2, width * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  return canvas;
+}
+
+// ==================== GAME ENGINE ====================
+class MightyGame {
+  constructor() {
+    this.playerNames = ['나', '트럼프', '시진핑', '푸틴', '김정은'];
+    this.playerEmojis = ['', '', '', '', ''];
+    this.totalScores = [20, 20, 20, 20, 20];
+    this.gameOver = false;
+    this.dealer = 0;
+    this.handNumber = 0;
+    this.reset();
+  }
+
+  reset() {
+    this.hands = [[], [], [], [], []];
+    this.kitty = [];
+    this.trump = null;
+    this.declarer = -1;
+    this.friend = -1;
+    this.friendCard = null;
+    this.friendType = null;
+    this.friendRevealed = false;
+    this.currentBid = { number: 12, suit: null };
+    this.trickNumber = 0;
+    this.currentTrick = [];
+    this.trickLeader = -1;
+    this.currentPlayer = -1;
+    this.rulingPoints = 0;
+    this.oppoPoints = 0;
+    this.rulingTricks = [];
+    this.oppoTricks = [];
+    this.phase = 'idle';
+    this.passedPlayers = new Set();
+    this.bidHistory = [];
+    this.jokerCalled = false;
+    this.discardedPoints = 0;
+    this.firstTrickWinner = -1;
+    this.playerWonPointCards = [[], [], [], [], []]; // point cards won by each player (for display)
+  }
+
+  getMightyCard() {
+    return this.trump === 'spades' ? 'A_diamonds' : 'A_spades';
+  }
+
+  getJokerCallCard() {
+    return this.trump === 'clubs' ? '3_spades' : '3_clubs';
+  }
+
+  isMighty(cardStr) {
+    return cardStr === this.getMightyCard();
+  }
+
+  isTeamMember(player) {
+    return player === this.declarer || player === this.friend;
+  }
+
+  createDeck() {
+    const deck = [];
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
+        deck.push(cardId(suit, rank));
+      }
+    }
+    deck.push('joker');
+    return deck;
+  }
+
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  sortHand(hand) {
+    const suitOrder = { spades: 0, hearts: 1, diamonds: 2, clubs: 3, joker: 4 };
+    return hand.sort((a, b) => {
+      const ca = parseCard(a), cb = parseCard(b);
+      if (ca.isJoker) return 1;
+      if (cb.isJoker) return -1;
+      if (suitOrder[ca.suit] !== suitOrder[cb.suit]) return suitOrder[ca.suit] - suitOrder[cb.suit];
+      return RANK_ORDER[ca.rank] - RANK_ORDER[cb.rank];
+    });
+  }
+
+  deal() {
+    const deck = this.shuffle(this.createDeck());
+    for (let i = 0; i < 5; i++) {
+      this.hands[i] = deck.slice(i * 10, (i + 1) * 10);
+      this.sortHand(this.hands[i]);
+    }
+    this.kitty = deck.slice(50, 53);
+  }
+
+  getCardStrength(cardStr, leadSuit) {
+    if (this.isMighty(cardStr)) return 1000;
+    if (cardStr === 'joker') {
+      if (this.jokerCalled) return -1;
+      if (this.trickNumber === 0 || this.trickNumber === 9) return -1;
+      return 900;
+    }
+    const card = parseCard(cardStr);
+    let score = RANK_ORDER[card.rank];
+    if (this.trump && this.trump !== 'notrump' && card.suit === this.trump) {
+      score += 100;
+    }
+    if (card.suit === leadSuit) {
+      score += 50;
+    }
+    return score;
+  }
+
+  determineTrickWinner() {
+    const leadCard = parseCard(this.currentTrick[0].card);
+    const leadSuit = leadCard.isJoker ? this.jokerDeclaredSuit : leadCard.suit;
+
+    let bestPlayer = this.currentTrick[0].player;
+    let bestStrength = this.getCardStrength(this.currentTrick[0].card, leadSuit);
+
+    for (let i = 1; i < this.currentTrick.length; i++) {
+      const s = this.getCardStrength(this.currentTrick[i].card, leadSuit);
+      if (s > bestStrength) {
+        bestStrength = s;
+        bestPlayer = this.currentTrick[i].player;
+      }
+    }
+    return bestPlayer;
+  }
+
+  getPlayableCards(player) {
+    const hand = this.hands[player];
+    if (this.currentTrick.length === 0) {
+      if (this.trickNumber === 0) {
+        let playable = hand.filter(c => {
+          if (this.isMighty(c)) return false;
+          if (c === 'joker') return false;
+          if (this.trump && this.trump !== 'notrump') {
+            const cc = parseCard(c);
+            if (cc.suit === this.trump) return false;
+          }
+          return true;
+        });
+        if (playable.length === 0) playable = [...hand];
+        return playable;
+      }
+      return [...hand];
+    }
+
+    const leadCard = parseCard(this.currentTrick[0].card);
+    const leadSuit = leadCard.isJoker ? this.jokerDeclaredSuit : leadCard.suit;
+
+    const mighty = this.getMightyCard();
+    const suitCards = hand.filter(c => {
+      if (c === 'joker') return false;
+      if (this.isMighty(c)) return false;
+      const cc = parseCard(c);
+      return cc.suit === leadSuit;
+    });
+
+    if (suitCards.length > 0) {
+      const playable = [...suitCards];
+      if (hand.includes('joker')) playable.push('joker');
+      if (hand.includes(mighty)) playable.push(mighty);
+      return playable;
+    }
+
+    return [...hand];
+  }
+
+  // ==================== ENHANCED AI LOGIC ====================
+
+  // Evaluate hand strength for bidding
+  aiEvalHand(player, trumpSuit) {
+    const hand = this.hands[player];
+    let tricks = 0;
+    const mighty = trumpSuit === 'spades' ? 'A_diamonds' : 'A_spades';
+    const suitCounts = { spades: 0, hearts: 0, diamonds: 0, clubs: 0 };
+    const suitHighCards = { spades: [], hearts: [], diamonds: [], clubs: [] };
+
+    for (const c of hand) {
+      if (c === 'joker') { tricks += 1.8; continue; }
+      if (c === mighty) { tricks += 2.0; continue; }
+      const card = parseCard(c);
+      suitCounts[card.suit]++;
+      suitHighCards[card.suit].push(RANK_ORDER[card.rank]);
+    }
+
+    // Trump suit tricks
+    if (trumpSuit !== 'notrump') {
+      const trumpCount = suitCounts[trumpSuit] || 0;
+      const trumpCards = suitHighCards[trumpSuit] || [];
+      trumpCards.sort((a, b) => b - a);
+      // Each trump above average is ~0.7 tricks; long trump adds extra
+      for (let i = 0; i < trumpCards.length; i++) {
+        if (trumpCards[i] >= 12) tricks += 0.9; // A, K
+        else if (trumpCards[i] >= 10) tricks += 0.6; // Q, J
+        else tricks += 0.25; // low trump still useful for ruffing
+      }
+      if (trumpCount >= 5) tricks += (trumpCount - 4) * 0.5; // long trump bonus
+
+      // Side suit evaluation
+      for (const s of SUITS) {
+        if (s === trumpSuit) continue;
+        const cards = suitHighCards[s];
+        cards.sort((a, b) => b - a);
+        if (cards.length === 0) tricks += Math.min(trumpCount, 1) * 0.4; // void = ruffing potential
+        else {
+          if (cards[0] === 14) tricks += 0.85; // Ace
+          if (cards.length > 1 && cards[1] === 13) tricks += 0.5; // King with guard
+          if (cards.length === 1 && cards[0] === 13) tricks += 0.2; // bare king
+        }
+      }
+    } else {
+      // No-trump: high cards in long suits are stronger
+      for (const s of SUITS) {
+        const cards = suitHighCards[s];
+        cards.sort((a, b) => b - a);
+        const len = cards.length;
+        if (len >= 4) tricks += (len - 3) * 0.4; // length winners
+        for (const r of cards) {
+          if (r === 14) tricks += 1.0;
+          else if (r === 13) tricks += (len >= 2 ? 0.8 : 0.3);
+          else if (r === 12) tricks += (len >= 3 ? 0.5 : 0.15);
+        }
+      }
+    }
+
+    return tricks;
+  }
+
+  aiBid(player) {
+    const hand = this.hands[player];
+
+    // Find best trump suit
+    let bestSuit = null;
+    let bestTricks = 0;
+    for (const s of SUITS) {
+      const t = this.aiEvalHand(player, s);
+      if (t > bestTricks) { bestTricks = t; bestSuit = s; }
+    }
+    const ntTricks = this.aiEvalHand(player, 'notrump');
+    let chooseSuit, chooseTricks;
+    if (ntTricks > bestTricks + 0.5) {
+      chooseSuit = 'notrump';
+      chooseTricks = ntTricks;
+    } else {
+      chooseSuit = bestSuit || 'spades';
+      chooseTricks = bestTricks;
+    }
+
+    // Convert expected tricks to bid number: ~13 + (tricks - 5)
+    const estimatedBid = Math.round(12.5 + chooseTricks * 0.6);
+    const minBid = this.currentBid.suit ? this.currentBid.number + 1 : 13;
+    const maxWilling = Math.min(estimatedBid, 20);
+
+    if (maxWilling >= minBid && chooseTricks >= 4.5) {
+      return { number: Math.max(13, minBid), suit: chooseSuit };
+    }
+    return null;
+  }
+
+  aiSelectFriend(player) {
+    const hand = this.hands[player];
+    const mighty = this.getMightyCard();
+    // Prefer calling mighty if we don't have it
+    if (!hand.includes(mighty)) return { type: 'card', card: mighty };
+    // Then joker
+    if (!hand.includes('joker')) return { type: 'card', card: 'joker' };
+    // Then aces of non-trump suits (prefer suits we are short in)
+    const suitCounts = {};
+    for (const c of hand) {
+      if (c === 'joker') continue;
+      const cc = parseCard(c);
+      suitCounts[cc.suit] = (suitCounts[cc.suit] || 0) + 1;
+    }
+    const suitsByCount = SUITS.filter(s => s !== this.trump).sort((a, b) => (suitCounts[a]||0) - (suitCounts[b]||0));
+    for (const suit of suitsByCount) {
+      const ace = `A_${suit}`;
+      if (ace !== mighty && !hand.includes(ace)) return { type: 'card', card: ace };
+    }
+    // Has everything — go no friend
+    return { type: 'none' };
+  }
+
+  aiExchange(player) {
+    const hand = [...this.hands[player]];
+    const trump = this.trump;
+    // Score each card for value: higher = keep, lower = discard
+    const cardValue = (c) => {
+      if (c === 'joker') return 100;
+      if (this.isMighty(c)) return 100;
+      const card = parseCard(c);
+      let val = RANK_ORDER[card.rank];
+      if (trump && trump !== 'notrump' && card.suit === trump) val += 30;
+      // Point cards are slightly valuable to bury (they count for us)
+      if (isPointCard(c)) val -= 3; // slightly prefer discarding point cards (they auto-count)
+      return val;
+    };
+    hand.sort((a, b) => cardValue(a) - cardValue(b));
+
+    // Discard 3 weakest, but prefer discarding point cards from weak suits
+    const discards = [];
+    const remaining = [...hand];
+    for (let d = 0; d < 3; d++) {
+      // Find weakest card in remaining
+      remaining.sort((a, b) => cardValue(a) - cardValue(b));
+      discards.push(remaining.shift());
+    }
+    return discards;
+  }
+
+  aiPlayCard(player) {
+    const playable = this.getPlayableCards(player);
+    if (playable.length === 1) return playable[0];
+
+    const isLeading = this.currentTrick.length === 0;
+    const isDeclarer = this.isTeamMember(player);
+    const mighty = this.getMightyCard();
+    const isLastPlayer = this.currentTrick.length === 4;
+
+    if (isLeading) {
+      return this.aiLead(player, playable, isDeclarer);
+    }
+
+    const leadCard = parseCard(this.currentTrick[0].card);
+    const leadSuit = leadCard.isJoker ? this.jokerDeclaredSuit : leadCard.suit;
+
+    // Count point cards in current trick
+    let trickPointCards = 0;
+    for (const t of this.currentTrick) {
+      if (isPointCard(t.card)) trickPointCards++;
+    }
+
+    const currentBest = Math.max(...this.currentTrick.map(t => this.getCardStrength(t.card, leadSuit)));
+
+    if (isDeclarer) {
+      return this.aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer);
+    } else {
+      return this.aiFollowOppo(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer);
+    }
+  }
+
+  aiLead(player, playable, isDeclarer) {
+    const mighty = this.getMightyCard();
+    const nonSpecial = playable.filter(c => c !== 'joker' && !this.isMighty(c));
+
+    if (isDeclarer) {
+      // Lead strong suits to pull out opponents' cards
+      // Lead Ace of a suit to win + gather points
+      const aces = nonSpecial.filter(c => parseCard(c).rank === 'A');
+      if (aces.length > 0) return aces[0];
+      // Lead mighty/joker mid-game for guaranteed wins
+      if (this.trickNumber >= 3 && playable.includes(mighty)) return mighty;
+      if (this.trickNumber >= 2 && playable.includes('joker')) return 'joker';
+      // Lead trump to drain opponent trump
+      if (this.trump && this.trump !== 'notrump') {
+        const trumpCards = nonSpecial.filter(c => parseCard(c).suit === this.trump);
+        if (trumpCards.length > 0) {
+          trumpCards.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
+          return trumpCards[0];
+        }
+      }
+      // Lead strongest
+      if (nonSpecial.length > 0) {
+        nonSpecial.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
+        return nonSpecial[0];
+      }
+      return playable[0];
+    } else {
+      // Opposition: lead suits where declarer is likely short, or lead low
+      // Avoid leading trump (helps declarer)
+      const nonTrump = nonSpecial.filter(c => {
+        if (!this.trump || this.trump === 'notrump') return true;
+        return parseCard(c).suit !== this.trump;
+      });
+      const toChoose = nonTrump.length > 0 ? nonTrump : nonSpecial.length > 0 ? nonSpecial : playable;
+
+      // Lead from short suits (opponent might have to follow)
+      const suitGroups = {};
+      for (const c of toChoose) {
+        const s = parseCard(c).suit;
+        if (!suitGroups[s]) suitGroups[s] = [];
+        suitGroups[s].push(c);
+      }
+      // Prefer short suits with high cards, or long suits with low cards
+      let bestCard = toChoose[0];
+      let bestScore = -1;
+      for (const s in suitGroups) {
+        const cards = suitGroups[s];
+        cards.sort((a, b) => RANK_ORDER[parseCard(a).rank] - RANK_ORDER[parseCard(b).rank]);
+        // Short suit with king/ace = lead it to set up winners
+        if (cards.length <= 2) {
+          const high = cards[cards.length - 1];
+          if (RANK_ORDER[parseCard(high).rank] >= 13) {
+            const sc = 10 + RANK_ORDER[parseCard(high).rank];
+            if (sc > bestScore) { bestScore = sc; bestCard = high; }
+          }
+        }
+        // Otherwise lead lowest from longest suit
+        if (cards.length >= 3) {
+          const sc = 5;
+          if (sc > bestScore || bestScore === -1) { bestScore = sc; bestCard = cards[0]; }
+        }
+      }
+      // Fallback: lead lowest
+      if (bestScore <= 0) {
+        toChoose.sort((a, b) => RANK_ORDER[parseCard(a).rank] - RANK_ORDER[parseCard(b).rank]);
+        return toChoose[0];
+      }
+      return bestCard;
+    }
+  }
+
+  aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPoints, isLast) {
+    playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
+    const myBest = this.getCardStrength(playable[0], leadSuit);
+    const myWorst = this.getCardStrength(playable[playable.length - 1], leadSuit);
+
+    // If we can win and trick has points, win it
+    if (myBest > currentBest) {
+      if (trickPoints > 0 || isLast) {
+        // Win with minimum winning card
+        for (let i = playable.length - 1; i >= 0; i--) {
+          if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
+        }
+        return playable[0];
+      }
+      // No points yet but we're last player — win cheap if possible
+      if (isLast) {
+        for (let i = playable.length - 1; i >= 0; i--) {
+          if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
+        }
+      }
+      // Early in trick, pointless trick — play low
+      return playable[playable.length - 1];
+    }
+    // Can't win — dump lowest
+    return playable[playable.length - 1];
+  }
+
+  aiFollowOppo(player, playable, leadSuit, currentBest, trickPoints, isLast) {
+    playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
+    const myBest = this.getCardStrength(playable[0], leadSuit);
+
+    // Check if current trick winner is declarer's team
+    let declarerWinning = false;
+    if (this.currentTrick.length > 0) {
+      let bestP = this.currentTrick[0].player;
+      let bestS = this.getCardStrength(this.currentTrick[0].card, leadSuit);
+      for (let i = 1; i < this.currentTrick.length; i++) {
+        const s = this.getCardStrength(this.currentTrick[i].card, leadSuit);
+        if (s > bestS) { bestS = s; bestP = this.currentTrick[i].player; }
+      }
+      declarerWinning = this.isTeamMember(bestP);
+    }
+
+    if (declarerWinning && myBest > currentBest && trickPoints > 0) {
+      // Declarer is winning a pointy trick — try to steal it
+      // Use minimum winning card
+      for (let i = playable.length - 1; i >= 0; i--) {
+        if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
+      }
+      return playable[0];
+    }
+
+    if (!declarerWinning) {
+      // Our team winning — dump point cards if possible (they'll count for us)
+      const pointCards = playable.filter(c => isPointCard(c));
+      if (pointCards.length > 0 && trickPoints < 3) {
+        return pointCards[0]; // give points to our winning teammate
+      }
+      // Play lowest to not overtake
+      return playable[playable.length - 1];
+    }
+
+    // Declarer winning, no points — save big cards, play lowest
+    return playable[playable.length - 1];
+  }
+
+  aiShouldJokerCall(player) {
+    const jcCard = this.getJokerCallCard();
+    if (!this.hands[player].includes(jcCard)) return false;
+    if (this.trickNumber === 0) return false;
+    if (this.isTeamMember(player)) return false;
+    // Call joker when there are point cards at stake or mid-game
+    if (this.trickNumber >= 3 && this.trickNumber <= 7) return true;
+    return Math.random() > 0.3; // 70% chance otherwise
+  }
+}
+
+// ==================== MULTIPLAYER GLOBALS ====================
+let localPlayerIndex = 0;
+let multiplayerMode = {
+  enabled: false,
+  isHost: false,
+  playerSlots: ['local', 'ai', 'ai', 'ai', 'ai'] // 'local', 'remote', 'ai'
+};
+
+function isLocalPlayer(idx) {
+  if (!multiplayerMode.enabled) return idx === 0;
+  return multiplayerMode.playerSlots[idx] === 'local';
+}
+
+function isRemotePlayer(idx) {
+  if (!multiplayerMode.enabled) return false;
+  return multiplayerMode.playerSlots[idx] === 'remote';
+}
+
+function isAIPlayer(idx) {
+  return multiplayerMode.playerSlots[idx] === 'ai';
+}
+
+// ==================== UI CONTROLLER ====================
+const game = new MightyGame();
+let uiResolve = null;
+
+function $(id) { return document.getElementById(id); }
+
+function showMessage(text, duration = 1800) {
+  return new Promise(resolve => {
+    const el = $('message-area');
+    el.textContent = text;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; resolve(); }, duration);
+  });
+}
+
+function updateAIHands() {
+  for (let i = 1; i < 5; i++) {
+    const el = $(`ai-hand-${i}`);
+    el.innerHTML = '';
+    for (let j = 0; j < game.hands[i].length; j++) {
+      const back = renderCardBack(36, 52);
+      back.style.marginLeft = j === 0 ? '0' : '-10px';
+      el.appendChild(back);
+    }
+  }
+}
+
+function updatePlayerHand(clickable = false, playableCards = null) {
+  const container = $('hand-container');
+  container.innerHTML = '';
+  const hand = game.hands[localPlayerIndex];
+  for (let i = 0; i < hand.length; i++) {
+    const cardEl = renderCard(hand[i], 80, 116);
+    cardEl.classList.add('hand-card');
+    cardEl.dataset.card = hand[i];
+    cardEl.dataset.index = i;
+    if (clickable && playableCards) {
+      if (playableCards.includes(hand[i])) {
+        cardEl.addEventListener('click', () => {
+          if (uiResolve) { uiResolve(hand[i]); uiResolve = null; }
+        });
+      } else {
+        cardEl.classList.add('disabled');
+      }
+    }
+    container.appendChild(cardEl);
+  }
+}
+
+function updateNameTags() {
+  for (let i = 0; i < 5; i++) {
+    const el = $(`name-${i}`);
+    el.className = 'name-tag';
+    el.textContent = game.playerNames[i];
+    if (i === game.declarer) {
+      el.classList.add('declarer');
+      el.textContent += ' (주공)';
+    }
+    if (i === game.friend && game.friendRevealed) {
+      el.classList.add('friend-revealed');
+      el.textContent += ' (프렌드)';
+    }
+  }
+}
+
+function updateScoreboard() {
+  const el = $('sb-rows');
+  el.innerHTML = '';
+  const avatarTypes = ['', 'trump', 'xi', 'putin', 'kim'];
+  for (let i = 0; i < 5; i++) {
+    const row = document.createElement('div');
+    row.className = 'sb-row';
+    const sc = game.totalScores[i];
+    row.innerHTML = `<span>${game.playerNames[i]}</span><span style="color:${sc > 15 ? '#4caf50' : sc > 5 ? '#FFD700' : '#f44336'}">${sc}%</span>`;
+    el.appendChild(row);
+  }
+}
+
+function updateTrumpIndicator() {
+  const el = $('trump-indicator');
+  const display = $('trump-display');
+  if (game.trump) {
+    el.classList.add('visible');
+    if (game.trump === 'notrump') {
+      display.textContent = '노기루다 (No Trump)';
+      display.style.color = '#FFD700';
+    } else {
+      display.innerHTML = `<span style="color:${SUIT_COLORS[game.trump]};font-size:22px">${SUIT_SYMBOLS[game.trump]}</span> ${game.trump}`;
+    }
+  } else {
+    el.classList.remove('visible');
+  }
+}
+
+function updatePointCounter() {
+  $('ruling-points').textContent = game.rulingPoints;
+  $('oppo-points').textContent = game.oppoPoints;
+  $('bid-display-side').textContent = game.currentBid.number + (game.trump === 'notrump' ? ' NT' : game.trump ? ' ' + SUIT_SYMBOLS[game.trump] : '');
+}
+
+function updateWonCardsDisplay() {
+  for (let i = 0; i < 5; i++) {
+    const container = $(`won-${i}`);
+    container.innerHTML = '';
+
+    const isDeclarer = i === game.declarer;
+    const isFriendRevealed = i === game.friend && game.friendRevealed;
+
+    // 주공 + 밝혀진 프렌드: 카드를 뒤집어서 덮음 (카드 뒷면만 표시)
+    if (isDeclarer || isFriendRevealed) {
+      const count = game.playerWonPointCards[i].length;
+      if (count > 0) {
+        for (let j = 0; j < count; j++) {
+          const back = renderCardBack(44, 64);
+          back.classList.add('won-card');
+          back.style.marginLeft = j === 0 ? '0' : '-20px';
+          container.appendChild(back);
+        }
+      }
+    } else {
+      // 야당 + 아직 안 밝혀진 프렌드: 점수 카드를 앞면으로 보여줌
+      for (let j = 0; j < game.playerWonPointCards[i].length; j++) {
+        const card = renderCard(game.playerWonPointCards[i][j], 44, 64);
+        card.classList.add('won-card');
+        card.style.marginLeft = j === 0 ? '0' : '-10px';
+        container.appendChild(card);
+      }
+    }
+  }
+}
+
+function clearWonCards() {
+  for (let i = 0; i < 5; i++) {
+    $(`won-${i}`).innerHTML = '';
+  }
+}
+
+function clearPlayArea() {
+  for (let i = 0; i < 5; i++) {
+    $(`slot-${i}`).innerHTML = '';
+  }
+}
+
+async function showShuffleAnimation() {
+  const playArea = $('play-area');
+  // 셔플 컨테이너 생성
+  const shuffleDiv = document.createElement('div');
+  shuffleDiv.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;';
+
+  // 카드 두 묶음 (왼쪽/오른쪽) 생성
+  const totalCards = 12;
+  const cards = [];
+  for (let i = 0; i < totalCards; i++) {
+    const c = renderCardBack(64, 92);
+    c.style.position = 'absolute';
+    c.style.left = '0px';
+    c.style.top = '0px';
+    c.style.transition = 'transform 0.15s ease-in-out';
+    c.style.transform = `translate(${-32 + (i % 2) * 8}px, ${-46 + i * 1.5}px) rotate(${-2 + i * 0.3}deg)`;
+    c.style.zIndex = i;
+    shuffleDiv.appendChild(c);
+    cards.push(c);
+  }
+  playArea.appendChild(shuffleDiv);
+
+  // 1단계: 카드를 두 묶음으로 나누기 (좌/우로 벌림)
+  await delay(200);
+  for (let i = 0; i < totalCards; i++) {
+    const isLeft = i % 2 === 0;
+    cards[i].style.transform = `translate(${isLeft ? -60 : 20}px, ${-46 + Math.floor(i/2) * 3}px) rotate(${isLeft ? -5 : 5}deg)`;
+  }
+  await delay(350);
+
+  // 2단계: 리플 셔플 (교대로 가운데로 모으기)
+  for (let round = 0; round < 2; round++) {
+    for (let i = 0; i < totalCards; i++) {
+      const offset = (round % 2 === 0) ? (i % 2 === 0 ? 1 : 0) : (i % 2 === 0 ? 0 : 1);
+      if (offset) {
+        cards[i].style.zIndex = 20 + i + round * totalCards;
+        cards[i].style.transform = `translate(${-20 + Math.random() * 4}px, ${-46 + i * 1.5 + Math.random() * 3}px) rotate(${-1 + Math.random() * 2}deg)`;
+      }
+      await delay(25);
+    }
+    await delay(150);
+    // 다시 벌리기
+    if (round < 1) {
+      for (let i = 0; i < totalCards; i++) {
+        const isLeft = i % 2 === (round % 2);
+        cards[i].style.transform = `translate(${isLeft ? -55 : 15}px, ${-46 + Math.floor(i/2) * 3}px) rotate(${isLeft ? -4 : 4}deg)`;
+      }
+      await delay(300);
+    }
+  }
+
+  // 3단계: 카드를 한 묶음으로 깔끔하게 모으기
+  for (let i = 0; i < totalCards; i++) {
+    cards[i].style.transform = `translate(-32px, ${-46 + i * 1.2}px) rotate(0deg)`;
+  }
+  await delay(400);
+
+  // 정리
+  playArea.removeChild(shuffleDiv);
+}
+
+function placeCardInSlot(player, cardStr) {
+  const slot = $(`slot-${player}`);
+  const cardEl = renderCard(cardStr, 72, 104);
+  cardEl.classList.add('played-card');
+  slot.innerHTML = '';
+  slot.appendChild(cardEl);
+  SFX.play('play');
+}
+
+function showModal(html) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `<div class="modal">${html}</div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function removeModal(overlay) {
+  if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+}
+
+function waitForUI() {
+  return new Promise(resolve => { uiResolve = resolve; });
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ==================== GAME FLOW ====================
+async function startGame() {
+  game.handNumber++;
+  game.reset();
+  updateScoreboard();
+  updateNameTags();
+  updateTrumpIndicator();
+  $('point-counter').classList.remove('visible');
+  $('trick-counter').classList.remove('visible');
+
+  clearPlayArea();
+  clearWonCards();
+  await showMessage(`제 ${game.handNumber}판`, 1800);
+
+  // 카드 셔플 애니메이션 + 효과음
+  SFX.play('shuffle');
+  await showShuffleAnimation();
+
+  game.deal();
+
+  // 카드를 한 장씩 돌려주는 연출
+  const handContainer = $('hand-container');
+  handContainer.innerHTML = '';
+  // 다른 플레이어 핸드 비움
+  for (let p = 0; p < 5; p++) {
+    if (p === localPlayerIndex) continue;
+    const el = $(`ai-hand-${p}`);
+    if (el) el.innerHTML = '';
+  }
+
+  for (let i = 0; i < 10; i++) {
+    // 플레이어 카드 한 장 추가
+    const cardEl = renderCard(game.hands[localPlayerIndex][i], 80, 116);
+    cardEl.classList.add('hand-card');
+    cardEl.dataset.card = game.hands[localPlayerIndex][i];
+    cardEl.dataset.index = i;
+    handContainer.appendChild(cardEl);
+
+    // 다른 플레이어 카드도 한 장씩 추가
+    for (let p = 0; p < 5; p++) {
+      if (p === localPlayerIndex) continue;
+      if (i < game.hands[p].length) {
+        const back = renderCardBack(36, 52);
+        back.style.marginLeft = i === 0 ? '0' : '-10px';
+        const ael = $(`ai-hand-${p}`);
+        if (ael) ael.appendChild(back);
+      }
+    }
+
+    SFX.play('deal');
+    await delay(100);
+  }
+
+  await doBidding();
+
+  if (game.declarer === -1) {
+    await showMessage('모두 패스! 다시 딜합니다.', 2200);
+    // 기존 카드를 먼저 치움
+    $('hand-container').innerHTML = '';
+    for (let p = 1; p < 5; p++) $(`ai-hand-${p}`).innerHTML = '';
+    startGame();
+    return;
+  }
+
+  await doExchange();
+  await doFriendSelection();
+
+  $('point-counter').classList.add('visible');
+  $('trick-counter').classList.add('visible');
+  updatePointCounter();
+
+  game.trickLeader = game.declarer;
+  for (let t = 0; t < 10; t++) {
+    game.trickNumber = t;
+    $('trick-num').textContent = t + 1;
+    game.currentTrick = [];
+    game.jokerCalled = false;
+    game.jokerDeclaredSuit = null;
+    clearPlayArea();
+
+    await doTrick(t);
+
+    const winner = game.determineTrickWinner();
+    await showMessage(`${game.playerNames[winner]} 트릭 승리!`, 1600);
+    SFX.play('trick');
+
+    if (t === 0) {
+      game.firstTrickWinner = winner;
+      if (game.friendType === 'first' && game.friend === -1) {
+        game.friend = winner;
+        if (winner !== game.declarer) {
+          game.friendRevealed = true;
+          await showMessage(`${game.playerNames[winner]}이(가) 프렌드!`, 2000);
+        }
+        updateNameTags();
+        updateWonCardsDisplay();
+      }
+    }
+
+    // Collect point cards from this trick
+    const trickPtCards = game.currentTrick.filter(p => isPointCard(p.card)).map(p => p.card);
+    let trickPoints = trickPtCards.length;
+
+    if (game.isTeamMember(winner)) {
+      game.rulingPoints += trickPoints;
+      game.rulingTricks.push(...game.currentTrick);
+    } else {
+      game.oppoPoints += trickPoints;
+      game.oppoTricks.push(...game.currentTrick);
+    }
+
+    // 바닥 카드를 먼저 치운 후 점수카드를 앞에 놓음
+    clearPlayArea();
+    await delay(400);
+
+    game.playerWonPointCards[winner].push(...trickPtCards);
+    updateWonCardsDisplay();
+    updatePointCounter();
+
+    game.trickLeader = winner;
+    await delay(600);
+  }
+
+  await doScoring();
+
+  // Check game over: if anyone is at 0 or below
+  const gameOver = game.totalScores.some(s => s <= 0);
+  if (gameOver) {
+    await doGameOver();
+    return;
+  }
+
+  game.dealer = (game.dealer + 1) % 5;
+  await delay(1200);
+  startGame();
+}
+
+async function doBidding() {
+  game.phase = 'bid';
+  game.passedPlayers.clear();
+  game.currentBid = { number: 12, suit: null };
+  let currentBidder = (game.dealer + 1) % 5;
+  let activeBidders = 5;
+
+  await showMessage('공약 시작!', 1400);
+
+  while (activeBidders > 1 || !game.currentBid.suit) {
+    if (game.passedPlayers.has(currentBidder)) {
+      currentBidder = (currentBidder + 1) % 5;
+      continue;
+    }
+
+    if (activeBidders <= 1 && game.currentBid.suit) break;
+
+    if (isLocalPlayer(currentBidder)) {
+      // 로컬 플레이어 (사람)
+      const bid = await humanBid();
+      if (bid === null) {
+        game.passedPlayers.add(currentBidder);
+        activeBidders--;
+        await showMessage('패스!', 900);
+      } else {
+        game.currentBid = bid;
+        game.bidHistory.push({ player: currentBidder, bid });
+        SFX.play('bid');
+        const suitText = bid.suit === 'notrump' ? 'NT' : SUIT_SYMBOLS[bid.suit];
+        await showMessage(`${bid.number} ${suitText}`, 1000);
+      }
+      if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
+    } else if (isRemotePlayer(currentBidder)) {
+      // 원격 플레이어
+      if (multiplayerMode.isHost) {
+        HostAdapter.broadcastState();
+        const res = await HostAdapter.waitForRemote(currentBidder, 'your-turn-bid', {
+          minBid: game.currentBid.suit ? game.currentBid.number + 1 : 13,
+          currentBid: game.currentBid
+        });
+        const bid = (res && !res.aiTakeover) ? res : game.aiBid(currentBidder);
+        if (bid === null) {
+          game.passedPlayers.add(currentBidder);
+          activeBidders--;
+          await showMessage(`${game.playerNames[currentBidder]}: 패스`, 900);
+        } else {
+          game.currentBid = bid;
+          game.bidHistory.push({ player: currentBidder, bid });
+          SFX.play('bid');
+          const suitText = bid.suit === 'notrump' ? 'NT' : SUIT_SYMBOLS[bid.suit];
+          await showMessage(`${game.playerNames[currentBidder]}: ${bid.number} ${suitText}`, 1000);
+        }
+        HostAdapter.broadcastState();
+      }
+    } else {
+      // AI
+      await delay(900);
+      const bid = game.aiBid(currentBidder);
+      if (bid === null) {
+        game.passedPlayers.add(currentBidder);
+        activeBidders--;
+        await showMessage(`${game.playerNames[currentBidder]}: 패스`, 900);
+      } else {
+        game.currentBid = bid;
+        game.bidHistory.push({ player: currentBidder, bid });
+        SFX.play('bid');
+        const suitText = bid.suit === 'notrump' ? 'NT' : SUIT_SYMBOLS[bid.suit];
+        await showMessage(`${game.playerNames[currentBidder]}: ${bid.number} ${suitText}`, 1000);
+      }
+      if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
+    }
+
+    if (game.currentBid.number >= 20) break;
+    currentBidder = (currentBidder + 1) % 5;
+    if (activeBidders <= 1 && game.currentBid.suit) break;
+    if (activeBidders <= 0) break;
+  }
+
+  if (!game.currentBid.suit) {
+    game.declarer = -1;
+    return;
+  }
+
+  const lastBid = game.bidHistory[game.bidHistory.length - 1];
+  game.declarer = lastBid.player;
+  game.trump = lastBid.bid.suit;
+
+  updateTrumpIndicator();
+  updateNameTags();
+  await showMessage(`${game.playerNames[game.declarer]}이(가) 주공! (${game.currentBid.number} ${game.trump === 'notrump' ? 'NT' : SUIT_SYMBOLS[game.trump]})`, 2200);
+}
+
+async function humanBid() {
+  const minNum = game.currentBid.suit ? game.currentBid.number + 1 : 13;
+
+  return new Promise(resolve => {
+    let selectedSuit = 'spades';
+    let selectedNum = Math.min(minNum, 20);
+
+    function render() {
+      const suitBtns = SUITS.map(s =>
+        `<div class="suit-btn ${selectedSuit === s ? 'active' : ''}" data-suit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</div>`
+      ).join('');
+      const ntBtn = `<div class="suit-btn ${selectedSuit === 'notrump' ? 'active' : ''}" data-suit="notrump" style="color:#FFD700;font-size:16px">NT</div>`;
+
+      const html = `
+        <h2>공약 선언</h2>
+        <p style="text-align:center;color:#aaa;font-size:15px">현재: ${game.currentBid.suit ? game.currentBid.number + ' ' + (game.currentBid.suit === 'notrump' ? 'NT' : SUIT_SYMBOLS[game.currentBid.suit]) : '없음'}</p>
+        <div class="bid-controls">
+          <div class="suit-select">${suitBtns}${ntBtn}</div>
+          <div class="bid-number">
+            <div class="btn" id="bid-minus">\u2212</div>
+            <span id="bid-num-display">${selectedNum}</span>
+            <div class="btn" id="bid-plus">+</div>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="bid-confirm" ${selectedNum < minNum && selectedSuit !== 'notrump' ? 'disabled' : ''}>선언</button>
+            <button class="btn" id="bid-pass">패스</button>
+          </div>
+        </div>`;
+
+      if (modal) removeModal(modal);
+      modal = showModal(html);
+
+      modal.querySelectorAll('.suit-btn').forEach(btn => {
+        btn.addEventListener('click', () => { selectedSuit = btn.dataset.suit; render(); });
+      });
+      modal.querySelector('#bid-minus')?.addEventListener('click', () => {
+        if (selectedNum > minNum) { selectedNum--; render(); }
+      });
+      modal.querySelector('#bid-plus')?.addEventListener('click', () => {
+        if (selectedNum < 20) { selectedNum++; render(); }
+      });
+      modal.querySelector('#bid-confirm')?.addEventListener('click', () => {
+        const isNoTrump = selectedSuit === 'notrump';
+        let valid = false;
+        if (!game.currentBid.suit) valid = selectedNum >= 13;
+        else if (selectedNum > game.currentBid.number) valid = true;
+        else if (selectedNum === game.currentBid.number && isNoTrump && game.currentBid.suit !== 'notrump') valid = true;
+        if (valid) { removeModal(modal); resolve({ number: selectedNum, suit: selectedSuit }); }
+      });
+      modal.querySelector('#bid-pass')?.addEventListener('click', () => { removeModal(modal); resolve(null); });
+    }
+
+    let modal = null;
+    render();
+  });
+}
+
+async function doExchange() {
+  game.phase = 'exchange';
+
+  if (isLocalPlayer(game.declarer)) {
+    const allCards = [...game.hands[localPlayerIndex], ...game.kitty];
+    game.sortHand(allCards);
+
+    await new Promise(resolve => {
+      let selected = new Set();
+
+      function render() {
+        const kittyLabel = game.kitty.map(c => {
+          const cc = parseCard(c);
+          return cc.isJoker ? 'JK' : cc.rank + SUIT_SYMBOLS[cc.suit];
+        }).join(', ');
+
+        const html = `
+          <h2>카드 교환</h2>
+          <p style="text-align:center;color:#aaa">바닥패: ${kittyLabel}</p>
+          <p style="text-align:center">버릴 카드 3장을 선택하세요</p>
+          <div class="card-row" id="exchange-cards"></div>
+          <div class="btn-row">
+            <button class="btn primary" id="exchange-confirm" ${selected.size !== 3 ? 'disabled' : ''}>확인 (${selected.size}/3)</button>
+          </div>`;
+
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+
+        const cardRow = modal.querySelector('#exchange-cards');
+        cardRow.innerHTML = '';
+        for (let i = 0; i < allCards.length; i++) {
+          const wrapper = document.createElement('div');
+          wrapper.style.display = 'inline-block';
+          wrapper.style.cursor = 'pointer';
+          wrapper.style.transition = 'transform 0.15s';
+          if (selected.has(i)) wrapper.style.transform = 'translateY(-12px)';
+          const canvas = renderCard(allCards[i], 56, 80);
+          canvas.style.borderRadius = '5px';
+          if (selected.has(i)) {
+            canvas.style.outline = '2px solid #FFD700';
+            canvas.style.borderRadius = '5px';
+          }
+          wrapper.appendChild(canvas);
+          wrapper.addEventListener('click', () => {
+            if (selected.has(i)) selected.delete(i);
+            else if (selected.size < 3) selected.add(i);
+            render();
+          });
+          cardRow.appendChild(wrapper);
+        }
+
+        modal.querySelector('#exchange-confirm')?.addEventListener('click', () => {
+          if (selected.size === 3) {
+            const discarded = [...selected].map(i => allCards[i]);
+            const kept = allCards.filter((_, i) => !selected.has(i));
+            game.discardedPoints = discarded.filter(c => isPointCard(c)).length;
+            // 버린 점수카드는 나중에 게임 끝날 때 반영 (미리 노출하지 않음)
+            game.hands[localPlayerIndex] = kept;
+            game.sortHand(game.hands[localPlayerIndex]);
+            removeModal(modal);
+            resolve();
+          }
+        });
+      }
+
+      let modal = null;
+      render();
+    });
+
+    await new Promise(resolve => {
+      const html = `
+        <h2>기루다 변경</h2>
+        <p style="text-align:center">기루다를 변경하시겠습니까?<br><small style="color:#aaa">변경 시 공약 수가 올라갑니다</small></p>
+        <div class="btn-row">
+          <button class="btn" id="keep-trump">유지</button>
+          ${SUITS.map(s => `<button class="btn" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
+          <button class="btn" data-newsuit="notrump" style="color:#FFD700">NT</button>
+        </div>`;
+      const modal = showModal(html);
+      modal.querySelector('#keep-trump').addEventListener('click', () => { removeModal(modal); resolve(); });
+      modal.querySelectorAll('[data-newsuit]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const newSuit = btn.dataset.newsuit;
+          if (newSuit !== game.trump) {
+            if (game.trump !== 'notrump' && newSuit === 'notrump') {
+              game.currentBid.number = Math.min(game.currentBid.number + 1, 20);
+            } else {
+              game.currentBid.number = Math.min(game.currentBid.number + 2, 20);
+            }
+            game.trump = newSuit;
+            updateTrumpIndicator();
+          }
+          removeModal(modal);
+          resolve();
+        });
+      });
+    });
+
+    updatePlayerHand();
+  } else {
+    await delay(800);
+    const allCards = [...game.hands[game.declarer], ...game.kitty];
+    game.sortHand(allCards);
+    game.hands[game.declarer] = allCards;
+    const discards = game.aiExchange(game.declarer);
+    game.discardedPoints = discards.filter(c => isPointCard(c)).length;
+    // 버린 점수카드는 나중에 게임 끝날 때 반영 (미리 노출하지 않음)
+    game.hands[game.declarer] = allCards.filter(c => !discards.includes(c));
+    updateAIHands();
+    await showMessage(`${game.playerNames[game.declarer]}이(가) 카드를 교환했습니다`, 1400);
+  }
+}
+
+async function doFriendSelection() {
+  game.phase = 'friend';
+
+  if (isLocalPlayer(game.declarer)) {
+    await new Promise(resolve => {
+      let selectedSuit = 'spades';
+      let selectedRank = 'A';
+
+      function render() {
+        const suitBtns = SUITS.map(s =>
+          `<div class="suit-btn ${selectedSuit === s ? 'active' : ''}" data-fsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</div>`
+        ).join('');
+        const rankBtns = RANKS.map(r =>
+          `<div class="rank-btn ${selectedRank === r ? 'active' : ''}" data-frank="${r}">${r}</div>`
+        ).join('');
+        const previewText = `${selectedRank}${SUIT_SYMBOLS[selectedSuit]}`;
+
+        const html = `
+          <h2>프렌드 선택</h2>
+          <div class="friend-picker">
+            <p>프렌드 카드를 지정하세요</p>
+            <div class="suit-select">${suitBtns}</div>
+            <div class="rank-select">${rankBtns}</div>
+            <p style="font-size:22px;color:#FFD700;font-weight:bold">선택: ${previewText}</p>
+            <div class="btn-row">
+              <button class="btn primary" id="friend-card-confirm">카드 지정</button>
+              <button class="btn" id="friend-first">초구 프렌드</button>
+              <button class="btn" id="friend-none">노프렌드</button>
+            </div>
+          </div>`;
+
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+
+        modal.querySelectorAll('[data-fsuit]').forEach(btn => {
+          btn.addEventListener('click', () => { selectedSuit = btn.dataset.fsuit; render(); });
+        });
+        modal.querySelectorAll('[data-frank]').forEach(btn => {
+          btn.addEventListener('click', () => { selectedRank = btn.dataset.frank; render(); });
+        });
+        modal.querySelector('#friend-card-confirm').addEventListener('click', () => {
+          const fc = cardId(selectedSuit, selectedRank);
+          game.friendCard = fc;
+          game.friendType = 'card';
+          if (game.hands[localPlayerIndex].includes(fc)) {
+            game.friend = 0;
+          } else {
+            for (let i = 1; i < 5; i++) {
+              if (game.hands[i].includes(fc)) { game.friend = i; break; }
+            }
+          }
+          removeModal(modal);
+          resolve();
+        });
+        modal.querySelector('#friend-first').addEventListener('click', () => {
+          game.friendType = 'first';
+          game.friendCard = null;
+          removeModal(modal);
+          resolve();
+        });
+        modal.querySelector('#friend-none').addEventListener('click', () => {
+          game.friendType = 'none';
+          game.friend = -1;
+          removeModal(modal);
+          resolve();
+        });
+      }
+      let modal = null;
+      render();
+    });
+  } else {
+    await delay(600);
+    const choice = game.aiSelectFriend(game.declarer);
+    if (choice.type === 'card') {
+      game.friendType = 'card';
+      game.friendCard = choice.card;
+      for (let i = 0; i < 5; i++) {
+        if (i === game.declarer) continue;
+        if (game.hands[i].includes(choice.card)) { game.friend = i; break; }
+      }
+      if (game.friend === -1 && game.hands[game.declarer].includes(choice.card)) game.friend = game.declarer;
+      const cc = parseCard(choice.card);
+      const cardName = cc.isJoker ? '조커' : `${cc.rank}${SUIT_SYMBOLS[cc.suit]}`;
+      await showMessage(`프렌드: ${cardName} 소유자`, 1800);
+    } else if (choice.type === 'first') {
+      game.friendType = 'first';
+      await showMessage('프렌드: 초구 승리자', 1800);
+    } else {
+      game.friendType = 'none';
+      game.friend = -1;
+      await showMessage('노프렌드!', 1800);
+    }
+  }
+
+  const friendText = game.friendType === 'card'
+    ? (() => { const cc = parseCard(game.friendCard); return cc.isJoker ? '조커' : `${cc.rank}${SUIT_SYMBOLS[cc.suit]}`; })()
+    : game.friendType === 'first' ? '초구 프렌드' : '노프렌드';
+  await showMessage(`프렌드: ${friendText}`, 1600);
+  updateNameTags();
+}
+
+async function doTrick(trickNum) {
+  let currentPlayer = game.trickLeader;
+
+  for (let i = 0; i < 5; i++) {
+    game.currentPlayer = currentPlayer;
+
+    if (isLocalPlayer(currentPlayer)) {
+      // === 로컬 플레이어 ===
+      const jcCard = game.getJokerCallCard();
+      if (trickNum > 0 && trickNum < 9 && i === 0 && game.hands[localPlayerIndex].includes(jcCard)) {
+        $('joker-call-btn').style.display = 'block';
+      }
+
+      const playable = game.getPlayableCards(localPlayerIndex);
+      updatePlayerHand(true, playable);
+      const chosenCard = await waitForUI();
+      $('joker-call-btn').style.display = 'none';
+
+      if (chosenCard === 'joker' && i === 0) {
+        const suit = await pickJokerSuit();
+        game.jokerDeclaredSuit = suit;
+      }
+
+      game.hands[localPlayerIndex].splice(game.hands[localPlayerIndex].indexOf(chosenCard), 1);
+      game.currentTrick.push({ player: localPlayerIndex, card: chosenCard });
+      placeCardInSlot(localPlayerIndex, chosenCard);
+      updatePlayerHand();
+      checkFriendReveal(chosenCard, localPlayerIndex);
+      if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
+
+    } else if (isRemotePlayer(currentPlayer)) {
+      // === 원격 플레이어 ===
+      if (multiplayerMode.isHost) {
+        HostAdapter.broadcastState();
+        const playable = game.getPlayableCards(currentPlayer);
+        const canJokerCall = trickNum > 0 && trickNum < 9 && i === 0 && game.hands[currentPlayer].includes(game.getJokerCallCard());
+        const res = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-play', { playableCards: playable, canJokerCall });
+        let chosenCard;
+        if (res && !res.aiTakeover && res.card) {
+          chosenCard = res.card;
+        } else {
+          chosenCard = game.aiPlayCard(currentPlayer);
+        }
+        if (chosenCard === 'joker' && i === 0) {
+          // Ask remote for suit or AI pick
+          const suitRes = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-joker-suit', {});
+          game.jokerDeclaredSuit = (suitRes && !suitRes.aiTakeover && suitRes.suit) ? suitRes.suit : 'spades';
+        }
+        game.hands[currentPlayer].splice(game.hands[currentPlayer].indexOf(chosenCard), 1);
+        game.currentTrick.push({ player: currentPlayer, card: chosenCard });
+        placeCardInSlot(currentPlayer, chosenCard);
+        updateAIHands();
+        if (chosenCard === 'joker' || game.isMighty(chosenCard)) SFX.play('joker');
+        checkFriendReveal(chosenCard, currentPlayer);
+        HostAdapter.broadcastState();
+      }
+
+    } else {
+      // === AI ===
+      await delay(700 + Math.random() * 400);
+
+      if (i === 0 && game.aiShouldJokerCall(currentPlayer)) {
+        const jcCard = game.getJokerCallCard();
+        game.jokerCalled = true;
+        game.hands[currentPlayer].splice(game.hands[currentPlayer].indexOf(jcCard), 1);
+        game.currentTrick.push({ player: currentPlayer, card: jcCard });
+        placeCardInSlot(currentPlayer, jcCard);
+        updateAIHands();
+        SFX.play('joker');
+        await showMessage(`${game.playerNames[currentPlayer]}: 조커콜!`, 1400);
+        checkFriendReveal(jcCard, currentPlayer);
+        currentPlayer = (currentPlayer + 1) % 5;
+        continue;
+      }
+
+      let card;
+      if (game.jokerCalled && game.hands[currentPlayer].includes('joker')) {
+        const mighty = game.getMightyCard();
+        if (game.hands[currentPlayer].includes(mighty)) card = mighty;
+        else card = 'joker';
+      } else {
+        card = game.aiPlayCard(currentPlayer);
+      }
+
+      if (card === 'joker' && i === 0) {
+        const suitCounts = {};
+        for (const c of game.hands[currentPlayer]) {
+          if (c === 'joker') continue;
+          const cc = parseCard(c);
+          suitCounts[cc.suit] = (suitCounts[cc.suit] || 0) + 1;
+        }
+        let bestSuit = 'spades', best = 0;
+        for (const s of SUITS) {
+          if ((suitCounts[s] || 0) > best) { best = suitCounts[s]; bestSuit = s; }
+        }
+        game.jokerDeclaredSuit = bestSuit;
+        await showMessage(`${game.playerNames[currentPlayer]}: 조커 리드 (${SUIT_SYMBOLS[bestSuit]})`, 1200);
+      }
+
+      game.hands[currentPlayer].splice(game.hands[currentPlayer].indexOf(card), 1);
+      game.currentTrick.push({ player: currentPlayer, card: card });
+      placeCardInSlot(currentPlayer, card);
+      updateAIHands();
+
+      if (card === 'joker' || game.isMighty(card)) SFX.play('joker');
+      checkFriendReveal(card, currentPlayer);
+    }
+
+    currentPlayer = (currentPlayer + 1) % 5;
+  }
+}
+
+function checkFriendReveal(card, player) {
+  if (game.friendType === 'card' && card === game.friendCard && !game.friendRevealed) {
+    game.friendRevealed = true;
+    game.friend = player;
+    updateNameTags();
+    // 프렌드 밝혀지면 그 사람의 점수카드를 뒤집어서 덮음
+    updateWonCardsDisplay();
+    if (player !== game.declarer) {
+      showMessage(`${game.playerNames[player]}이(가) 프렌드!`, 1800);
+    }
+  }
+}
+
+game.doJokerCall = function() {
+  if (game.currentTrick.length === 0 && game.trickNumber > 0 && game.trickNumber < 9) {
+    const jcCard = game.getJokerCallCard();
+    if (game.hands[localPlayerIndex].includes(jcCard)) {
+      game.jokerCalled = true;
+      $('joker-call-btn').style.display = 'none';
+      showMessage('조커콜!', 1200);
+      SFX.play('joker');
+      if (uiResolve) { uiResolve(jcCard); uiResolve = null; }
+    }
+  }
+};
+
+async function pickJokerSuit() {
+  return new Promise(resolve => {
+    const html = `
+      <h2>조커 리드</h2>
+      <p style="text-align:center">어떤 문양을 선언하시겠습니까?</p>
+      <div class="btn-row">
+        ${SUITS.map(s => `<button class="btn" data-jssuit="${s}" style="color:${SUIT_COLORS[s]};font-size:24px">${SUIT_SYMBOLS[s]}</button>`).join('')}
+      </div>`;
+    const modal = showModal(html);
+    modal.querySelectorAll('[data-jssuit]').forEach(btn => {
+      btn.addEventListener('click', () => { removeModal(modal); resolve(btn.dataset.jssuit); });
+    });
+  });
+}
+
+async function doScoring() {
+  game.phase = 'score';
+
+  const bid = game.currentBid.number;
+  // 버린 점수카드를 이제 여당 점수에 반영
+  game.rulingPoints += game.discardedPoints;
+  const totalRuling = game.rulingPoints;
+  const totalOppo = game.oppoPoints;
+  const success = totalRuling >= bid;
+  const isNoTrump = game.trump === 'notrump';
+  const isNoFriend = game.friendType === 'none';
+  const isRun = totalRuling === 20 && success;
+
+  let baseS;
+  if (success) baseS = 2 * (bid - 13) + (totalRuling - bid);
+  else baseS = bid - totalRuling;
+  if (baseS < 1) baseS = 1;
+
+  let multiplier = 1;
+  if (isNoTrump) multiplier *= 2;
+  if (isNoFriend) multiplier *= 2;
+  if (isRun) multiplier *= 2;
+
+  const S = baseS * multiplier;
+
+  const scores = [0, 0, 0, 0, 0];
+  if (success) {
+    if (isNoFriend || game.friend === game.declarer || game.friend === -1) {
+      for (let i = 0; i < 5; i++) {
+        if (i === game.declarer) scores[i] = S * 4;
+        else scores[i] = -S;
+      }
+    } else {
+      scores[game.declarer] = S * 2;
+      scores[game.friend] = S;
+      for (let i = 0; i < 5; i++) {
+        if (i !== game.declarer && i !== game.friend) scores[i] = -S;
+      }
+    }
+  } else {
+    if (isNoFriend || game.friend === game.declarer || game.friend === -1) {
+      for (let i = 0; i < 5; i++) {
+        if (i === game.declarer) scores[i] = -S * 4;
+        else scores[i] = S;
+      }
+    } else {
+      scores[game.declarer] = -S * 2;
+      scores[game.friend] = -S;
+      for (let i = 0; i < 5; i++) {
+        if (i !== game.declarer && i !== game.friend) scores[i] = S;
+      }
+    }
+  }
+
+  // Convert scores to 지지율 changes (1/10)
+  const ratingChanges = scores.map(s => Math.round(s / 10 * 10) / 10); // keep 1 decimal
+
+  for (let i = 0; i < 5; i++) {
+    game.totalScores[i] = Math.round((game.totalScores[i] + ratingChanges[i]) * 10) / 10;
+    if (game.totalScores[i] < 0) game.totalScores[i] = 0;
+  }
+
+  if (scores[0] > 0) SFX.play('win');
+  else SFX.play('lose');
+
+  await new Promise(resolve => {
+    const resultText = success ? '성공!' : '실패!';
+    const resultColor = success ? '#4caf50' : '#f44336';
+    let multipliersText = '';
+    if (isNoTrump) multipliersText += ' [노기루다 x2]';
+    if (isNoFriend) multipliersText += ' [노프렌드 x2]';
+    if (isRun) multipliersText += ' [런 x2]';
+
+    const rows = game.playerNames.map((name, i) => {
+      const rc = ratingChanges[i];
+      const cls = rc >= 0 ? 'score-positive' : 'score-negative';
+      const role = i === game.declarer ? '(주공)' : (i === game.friend && game.friendRevealed ? '(프렌드)' : '');
+      return `<tr><td>${name} ${role}</td><td class="${cls}">${rc > 0 ? '+' : ''}${rc}%</td><td>${game.totalScores[i]}%</td></tr>`;
+    }).join('');
+
+    const html = `
+      <h2 style="color:${resultColor};font-size:28px">${resultText}</h2>
+      <p style="text-align:center;font-size:17px">공약: ${bid} | 여당 획득: ${totalRuling}점 | 야당: ${totalOppo}점</p>
+      <p style="text-align:center;color:#aaa;font-size:14px">기본 점수: ${baseS}${multipliersText}</p>
+      <table class="score-table">
+        <tr><th>플레이어</th><th>지지율 변동</th><th>현재 지지율</th></tr>
+        ${rows}
+      </table>
+      <div class="btn-row">
+        <button class="btn primary" id="next-hand">다음 판</button>
+      </div>`;
+
+    const modal = showModal(html);
+    modal.querySelector('#next-hand').addEventListener('click', () => { removeModal(modal); resolve(); });
+  });
+
+  updateScoreboard();
+  for (let i = 0; i < 5; i++) {
+    $(`total-${i}`).textContent = '지지율 ' + game.totalScores[i] + '%';
+  }
+}
+
+// ==================== GAME OVER ====================
+async function doGameOver() {
+  game.gameOver = true;
+  BGM.stop();
+
+  // Find winner (highest score)
+  let maxScore = -Infinity;
+  let winner = 0;
+  for (let i = 0; i < 5; i++) {
+    if (game.totalScores[i] > maxScore) {
+      maxScore = game.totalScores[i];
+      winner = i;
+    }
+  }
+
+  // Find eliminated players
+  const eliminated = [];
+  for (let i = 0; i < 5; i++) {
+    if (game.totalScores[i] <= 0) eliminated.push(game.playerNames[i]);
+  }
+
+  SFX.play(winner === 0 ? 'win' : 'lose');
+
+  await new Promise(resolve => {
+    const isPlayerWin = winner === 0;
+    const titleColor = isPlayerWin ? '#FFD700' : '#f44336';
+    const titleText = isPlayerWin ? '축하합니다! 우승!' : `${game.playerNames[winner]} 우승!`;
+
+    const rows = game.playerNames.map((name, i) => {
+      const sc = game.totalScores[i];
+      const cls = i === winner ? 'score-positive' : (sc <= 0 ? 'score-negative' : '');
+      const badge = i === winner ? ' (우승)' : (sc <= 0 ? ' (탈락)' : '');
+      return `<tr><td>${name}${badge}</td><td class="${cls}" style="font-size:18px">${sc}%</td></tr>`;
+    }).join('');
+
+    const html = `
+      <h2 style="color:${titleColor};font-size:32px">${titleText}</h2>
+      <p style="text-align:center;font-size:16px;color:#aaa">${eliminated.join(', ')}의 지지율이 0%로 게임 종료!</p>
+      <p style="text-align:center;font-size:15px;margin-top:8px">총 ${game.handNumber}판 진행</p>
+      <table class="score-table">
+        <tr><th>플레이어</th><th>최종 지지율</th></tr>
+        ${rows}
+      </table>
+      <div class="btn-row" style="margin-top:20px">
+        <button class="btn primary" id="new-game" style="font-size:18px;padding:12px 32px">새 게임</button>
+      </div>`;
+
+    const modal = showModal(html);
+    modal.querySelector('#new-game').addEventListener('click', () => {
+      removeModal(modal);
+      // Full reset
+      game.totalScores = [20, 20, 20, 20, 20];
+      game.gameOver = false;
+      game.handNumber = 0;
+      game.dealer = 0;
+      updateScoreboard();
+      for (let i = 0; i < 5; i++) {
+        $(`total-${i}`).textContent = '지지율 20%';
+      }
+      resolve();
+    });
+  });
+
+  startGame();
+}
+
+// ==================== TITLE SCREEN ====================
+(function initTitleScreen() {
+  const container = document.getElementById('title-cards');
+  // Scatter decorative cards across the background
+  const decoCards = ['A_spades','K_hearts','Q_diamonds','J_clubs','10_spades','A_hearts','K_spades','joker','Q_clubs','J_hearts','A_diamonds','K_clubs'];
+  decoCards.forEach((cardStr, i) => {
+    const canvas = renderCard(cardStr, 100, 145);
+    canvas.classList.add('deco-card');
+    // Scatter positions
+    const angle = (i / decoCards.length) * 360;
+    const radius = 280 + (i % 3) * 120;
+    const cx = 50 + Math.cos(angle * Math.PI / 180) * (radius / 8);
+    const cy = 50 + Math.sin(angle * Math.PI / 180) * (radius / 10);
+    canvas.style.left = cx + '%';
+    canvas.style.top = cy + '%';
+    canvas.style.transform = `translate(-50%, -50%) rotate(${-30 + i * 22}deg)`;
+    canvas.style.opacity = 0.12 + (i % 3) * 0.04;
+    container.appendChild(canvas);
+  });
+
+  // Menu button handlers
+  document.getElementById('btn-solo').addEventListener('click', () => {
+    const titleScreen = document.getElementById('title-screen');
+    titleScreen.style.transition = 'opacity 0.6s';
+    titleScreen.style.opacity = '0';
+    setTimeout(() => {
+      titleScreen.style.display = 'none';
+      document.getElementById('game-container').style.display = 'block';
+      // AudioContext 활성화 + BGM 시작
+      SFX.play('deal');
+      setTimeout(() => BGM.toggle(), 300);
+      startGame();
+    }, 600);
+  });
+
+  document.getElementById('btn-multi').addEventListener('click', () => {
+    Lobby.show();
+    Lobby.onStart = startMultiplayer;
+  });
+
+  document.getElementById('btn-credits').addEventListener('click', () => {
+    document.getElementById('panel-credits').classList.add('visible');
+  });
+})();
+
+// ==================== MULTIPLAYER START ====================
+function startMultiplayer(config) {
+  const { isHost, mySeat, players } = config;
+  const aiNames = ['트럼프', '시진핑', '푸틴', '김정은'];
+
+  multiplayerMode.enabled = true;
+  multiplayerMode.isHost = isHost;
+  localPlayerIndex = mySeat;
+
+  // Build player slots
+  const seatsTaken = new Set(players.map(p => p.seat));
+  for (let i = 0; i < 5; i++) {
+    if (i === mySeat) {
+      multiplayerMode.playerSlots[i] = 'local';
+    } else if (seatsTaken.has(i)) {
+      multiplayerMode.playerSlots[i] = 'remote';
+    } else {
+      multiplayerMode.playerSlots[i] = 'ai';
+    }
+  }
+
+  // Set player names
+  for (const p of players) {
+    game.playerNames[p.seat] = p.name;
+  }
+  for (let i = 0; i < 5; i++) {
+    if (multiplayerMode.playerSlots[i] === 'ai') {
+      game.playerNames[i] = aiNames[i - 1] || `AI-${i}`;
+    }
+  }
+
+  // Init adapter
+  if (isHost) {
+    HostAdapter.init();
+  } else {
+    RemoteAdapter.init();
+  }
+
+  // Transition to game screen
+  const titleScreen = document.getElementById('title-screen');
+  titleScreen.style.transition = 'opacity 0.6s';
+  titleScreen.style.opacity = '0';
+  setTimeout(() => {
+    titleScreen.style.display = 'none';
+    document.getElementById('game-container').style.display = 'block';
+    SFX.play('deal');
+    setTimeout(() => BGM.toggle(), 300);
+
+    if (isHost) {
+      // Host runs the game
+      startGame();
+    }
+    // Remote clients wait for state-update messages from host
+  }, 600);
+}
+</script>
+<script src="client/network.js"></script>
+<script src="client/lobby.js"></script>
+<script src="client/host.js"></script>
+<script src="client/remote.js"></script>
+</body>
+</html>

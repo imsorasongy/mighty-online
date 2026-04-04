@@ -1,0 +1,302 @@
+// ==================== REMOTE CLIENT ADAPTER ====================
+// Runs on non-host clients. Receives state from host, renders UI,
+// captures player actions and sends them to host.
+
+const RemoteAdapter = {
+  gameState: null,
+
+  init() {
+    Network.onGameMsg = (data) => this.handleMessage(data);
+    Network.onHostDisconnected = () => {
+      alert('호스트가 연결을 끊었습니다. 게임이 종료됩니다.');
+      window.location.reload();
+    };
+  },
+
+  handleMessage(data) {
+    const { type, payload } = data;
+
+    switch (type) {
+      case 'state-update':
+        this.applyState(payload);
+        break;
+      case 'your-turn-bid':
+        this.handleBidRequest(payload);
+        break;
+      case 'your-turn-exchange':
+        this.handleExchangeRequest(payload);
+        break;
+      case 'your-turn-trump-change':
+        this.handleTrumpChangeRequest(payload);
+        break;
+      case 'your-turn-friend':
+        this.handleFriendRequest(payload);
+        break;
+      case 'your-turn-play':
+        this.handlePlayRequest(payload);
+        break;
+      case 'your-turn-joker-suit':
+        this.handleJokerSuitRequest(payload);
+        break;
+      case 'show-message':
+        showMessage(payload.text, payload.duration || 1800);
+        break;
+      case 'play-sfx':
+        SFX.play(payload.sfx);
+        break;
+      case 'trick-result':
+        // Already reflected in state-update
+        break;
+      case 'round-result':
+        this.handleRoundResult(payload);
+        break;
+      case 'game-over':
+        this.handleGameOver(payload);
+        break;
+    }
+  },
+
+  applyState(state) {
+    this.gameState = state;
+    // Update game object fields for rendering functions to use
+    game.phase = state.phase;
+    game.trump = state.trump;
+    game.declarer = state.declarer;
+    game.friend = state.friend;
+    game.friendRevealed = state.friendRevealed;
+    game.friendType = state.friendType;
+    game.friendCard = state.friendCard;
+    game.currentBid = state.currentBid;
+    game.trickNumber = state.trickNumber;
+    game.currentTrick = state.currentTrick;
+    game.trickLeader = state.trickLeader;
+    game.currentPlayer = state.currentPlayer;
+    game.rulingPoints = state.rulingPoints;
+    game.oppoPoints = state.oppoPoints;
+    game.playerNames = state.playerNames;
+    game.totalScores = state.totalScores;
+    game.handNumber = state.handNumber;
+    game.playerWonPointCards = state.playerWonPointCards;
+
+    // Set own hand
+    game.hands[localPlayerIndex] = state.yourHand || [];
+
+    // Render
+    this.render(state);
+  },
+
+  render(state) {
+    updateNameTags();
+    updateTrumpIndicator();
+    updatePointCounter();
+    updateWonCardsDisplay();
+    updateScoreboard();
+
+    for (let i = 0; i < 5; i++) {
+      document.getElementById(`total-${i}`).textContent = '지지율 ' + state.totalScores[i] + '%';
+    }
+
+    if (state.trickNumber !== undefined) {
+      document.getElementById('trick-num').textContent = (state.trickNumber + 1);
+      document.getElementById('trick-counter').classList.add('visible');
+      document.getElementById('point-counter').classList.add('visible');
+    }
+
+    // Render own hand
+    updatePlayerHand();
+
+    // Render AI hands (card backs based on handCounts)
+    for (let i = 0; i < 5; i++) {
+      if (i === localPlayerIndex) continue;
+      const viewI = i; // TODO: viewSeat if needed
+      const el = document.getElementById(`ai-hand-${i}`);
+      if (!el) continue;
+      el.innerHTML = '';
+      const count = state.handCounts ? state.handCounts[i] : 0;
+      for (let j = 0; j < count; j++) {
+        const back = renderCardBack(36, 52);
+        back.style.marginLeft = j === 0 ? '0' : '-10px';
+        el.appendChild(back);
+      }
+    }
+
+    // Render current trick
+    clearPlayArea();
+    if (state.currentTrick) {
+      for (const play of state.currentTrick) {
+        placeCardInSlot(play.player, play.card);
+      }
+    }
+  },
+
+  // ========== Turn Handlers ==========
+
+  async handleBidRequest(payload) {
+    // Show bidding UI (reuse humanBid)
+    const bid = await humanBid();
+    Network.sendToHost('bid-response', bid);
+  },
+
+  async handleExchangeRequest(payload) {
+    // payload has { allCards, kittyLabel }
+    const allCards = payload.allCards;
+    game.sortHand(allCards);
+
+    const result = await new Promise(resolve => {
+      let selected = new Set();
+      let modal = null;
+
+      function render() {
+        const kittyLabel = payload.kittyLabel || '';
+        const html = `
+          <h2>카드 교환</h2>
+          <p style="text-align:center;color:#aaa">바닥패: ${kittyLabel}</p>
+          <p style="text-align:center">버릴 카드 3장을 선택하세요</p>
+          <div class="card-row" id="exchange-cards"></div>
+          <div class="btn-row">
+            <button class="btn primary" id="exchange-confirm" ${selected.size !== 3 ? 'disabled' : ''}>확인 (${selected.size}/3)</button>
+          </div>`;
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+        const cardRow = modal.querySelector('#exchange-cards');
+        for (let i = 0; i < allCards.length; i++) {
+          const wrapper = document.createElement('div');
+          wrapper.style.display = 'inline-block';
+          wrapper.style.cursor = 'pointer';
+          wrapper.style.transition = 'transform 0.15s';
+          if (selected.has(i)) wrapper.style.transform = 'translateY(-12px)';
+          const canvas = renderCard(allCards[i], 56, 80);
+          canvas.style.borderRadius = '5px';
+          if (selected.has(i)) {
+            canvas.style.outline = '2px solid #FFD700';
+            canvas.style.borderRadius = '5px';
+          }
+          wrapper.appendChild(canvas);
+          wrapper.addEventListener('click', () => {
+            if (selected.has(i)) selected.delete(i);
+            else if (selected.size < 3) selected.add(i);
+            render();
+          });
+          cardRow.appendChild(wrapper);
+        }
+        modal.querySelector('#exchange-confirm')?.addEventListener('click', () => {
+          if (selected.size === 3) {
+            const discarded = [...selected].map(i => allCards[i]);
+            removeModal(modal);
+            resolve(discarded);
+          }
+        });
+      }
+      render();
+    });
+
+    Network.sendToHost('exchange-response', { discards: result });
+  },
+
+  async handleTrumpChangeRequest(payload) {
+    const result = await new Promise(resolve => {
+      const html = `
+        <h2>기루다 변경</h2>
+        <p style="text-align:center">기루다를 변경하시겠습니까?<br><small style="color:#aaa">변경 시 공약 수가 올라갑니다</small></p>
+        <div class="btn-row">
+          <button class="btn" id="keep-trump">유지</button>
+          ${SUITS.map(s => `<button class="btn" data-newsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</button>`).join('')}
+          <button class="btn" data-newsuit="notrump" style="color:#FFD700">NT</button>
+        </div>`;
+      const modal = showModal(html);
+      modal.querySelector('#keep-trump').addEventListener('click', () => { removeModal(modal); resolve(null); });
+      modal.querySelectorAll('[data-newsuit]').forEach(btn => {
+        btn.addEventListener('click', () => { removeModal(modal); resolve(btn.dataset.newsuit); });
+      });
+    });
+    Network.sendToHost('trump-change-response', { newTrump: result });
+  },
+
+  async handleFriendRequest(payload) {
+    // Reuse the friend selection UI
+    const result = await new Promise(resolve => {
+      let selectedSuit = 'spades';
+      let selectedRank = 'A';
+      let modal = null;
+
+      function render() {
+        const suitBtns = SUITS.map(s =>
+          `<div class="suit-btn ${selectedSuit === s ? 'active' : ''}" data-fsuit="${s}" style="color:${SUIT_COLORS[s]}">${SUIT_SYMBOLS[s]}</div>`
+        ).join('');
+        const rankBtns = RANKS.map(r =>
+          `<div class="rank-btn ${selectedRank === r ? 'active' : ''}" data-frank="${r}">${r}</div>`
+        ).join('');
+        const previewText = `${selectedRank}${SUIT_SYMBOLS[selectedSuit]}`;
+        const html = `
+          <h2>프렌드 선택</h2>
+          <div class="friend-picker">
+            <p>프렌드 카드를 지정하세요</p>
+            <div class="suit-select">${suitBtns}</div>
+            <div class="rank-select">${rankBtns}</div>
+            <p style="font-size:22px;color:#FFD700;font-weight:bold">선택: ${previewText}</p>
+            <div class="btn-row">
+              <button class="btn primary" id="friend-card-confirm">카드 지정</button>
+              <button class="btn" id="friend-first">초구 프렌드</button>
+              <button class="btn" id="friend-none">노프렌드</button>
+            </div>
+          </div>`;
+        if (modal) removeModal(modal);
+        modal = showModal(html);
+        modal.querySelectorAll('[data-fsuit]').forEach(btn => {
+          btn.addEventListener('click', () => { selectedSuit = btn.dataset.fsuit; render(); });
+        });
+        modal.querySelectorAll('[data-frank]').forEach(btn => {
+          btn.addEventListener('click', () => { selectedRank = btn.dataset.frank; render(); });
+        });
+        modal.querySelector('#friend-card-confirm').addEventListener('click', () => {
+          removeModal(modal);
+          resolve({ type: 'card', suit: selectedSuit, rank: selectedRank });
+        });
+        modal.querySelector('#friend-first').addEventListener('click', () => {
+          removeModal(modal); resolve({ type: 'first' });
+        });
+        modal.querySelector('#friend-none').addEventListener('click', () => {
+          removeModal(modal); resolve({ type: 'none' });
+        });
+      }
+      render();
+    });
+    Network.sendToHost('friend-response', result);
+  },
+
+  async handlePlayRequest(payload) {
+    const playableCards = payload.playableCards;
+    // Show joker call button if applicable
+    if (payload.canJokerCall) {
+      document.getElementById('joker-call-btn').style.display = 'block';
+    }
+
+    updatePlayerHand(true, playableCards);
+    const chosenCard = await waitForUI();
+    document.getElementById('joker-call-btn').style.display = 'none';
+    Network.sendToHost('play-response', { card: chosenCard });
+  },
+
+  async handleJokerSuitRequest() {
+    const suit = await pickJokerSuit();
+    Network.sendToHost('joker-suit-response', { suit });
+  },
+
+  async handleRoundResult(payload) {
+    const modal = showModal(payload.html);
+    await new Promise(resolve => {
+      modal.querySelector('#next-hand').addEventListener('click', () => {
+        removeModal(modal);
+        resolve();
+      });
+    });
+  },
+
+  async handleGameOver(payload) {
+    const modal = showModal(payload.html);
+    modal.querySelector('#new-game')?.addEventListener('click', () => {
+      removeModal(modal);
+      window.location.reload();
+    });
+  }
+};
