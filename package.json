@@ -2,38 +2,14 @@
   "name": "mighty-online",
   "version": "1.0.0",
   "description": "온라인 마이티 카드게임",
-  "main": "electron-main.js",
+  "main": "server/server.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder --win",
-    "server": "node server/server.js"
+    "start": "node server/server.js",
+    "build": "cd server && npm install",
+    "electron": "npx electron electron-main.js",
+    "package": "npx @electron/packager . MightyOnline --platform=win32 --arch=x64 --overwrite --ignore=\"(server|dist|\\.git|render\\.yaml|마이티\\.html|온라인마이티\\.bat|\\.gitignore)\""
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "localtunnel": "^2.0.2",
-    "socket.io": "^4.7.4"
-  },
-  "devDependencies": {
-    "@electron/packager": "^19.1.0",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
-  },
-  "build": {
-    "appId": "com.mighty.online",
-    "productName": "MightyOnline",
-    "win": {
-      "target": "portable",
-      "icon": "icon.png"
-    },
-    "files": [
-      "electron-main.js",
-      "온라인마이티.html",
-      "client/**/*",
-      "node_modules/**/*"
-    ],
-    "extraResources": []
   }
 }
