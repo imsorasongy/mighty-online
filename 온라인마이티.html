@@ -1957,6 +1957,56 @@ class MightyGame {
   // ==================== ENHANCED AI LOGIC ====================
 
   // Evaluate hand strength for bidding
+  // ==================== CARD COUNTING (BossBrain-inspired) ====================
+  initCardCounter() {
+    this.usedCards = new Set();
+    // Track which players are void in which suits
+    this.playerVoid = Array.from({length: 5}, () => ({ spades: false, hearts: false, diamonds: false, clubs: false }));
+    this.trickHistory = [];
+  }
+
+  recordPlayedCard(card, player, leadSuit) {
+    if (!this.usedCards) this.initCardCounter();
+    this.usedCards.add(card);
+    // If player didn't follow lead suit, they're void
+    if (card !== 'joker' && !this.isMighty(card)) {
+      const cc = parseCard(card);
+      if (leadSuit && cc.suit !== leadSuit && cc.suit !== this.trump) {
+        this.playerVoid[player][leadSuit] = true;
+      }
+    }
+  }
+
+  countRemainingSuit(suit) {
+    if (!this.usedCards) return 13;
+    let count = 0;
+    for (const rank of RANKS) {
+      if (!this.usedCards.has(cardId(suit, rank))) count++;
+    }
+    return count;
+  }
+
+  countRemainingTrump() {
+    if (!this.trump || this.trump === 'notrump') return 0;
+    return this.countRemainingSuit(this.trump);
+  }
+
+  getHighestRemaining(suit) {
+    for (let i = RANKS.length - 1; i >= 0; i--) {
+      const c = cardId(suit, RANKS[i]);
+      if (!this.usedCards || !this.usedCards.has(c)) return c;
+    }
+    return null;
+  }
+
+  isHighestInSuit(card) {
+    const cc = parseCard(card);
+    if (cc.isJoker) return false;
+    const highest = this.getHighestRemaining(cc.suit);
+    return highest === card;
+  }
+
+  // ==================== HAND EVALUATION ====================
   aiEvalHand(player, trumpSuit) {
     const hand = this.hands[player];
     let tricks = 0;
@@ -1972,53 +2022,55 @@ class MightyGame {
       suitHighCards[card.suit].push(RANK_ORDER[card.rank]);
     }
 
-    // Trump suit tricks
     if (trumpSuit !== 'notrump') {
       const trumpCount = suitCounts[trumpSuit] || 0;
       const trumpCards = suitHighCards[trumpSuit] || [];
       trumpCards.sort((a, b) => b - a);
-      // Each trump above average is ~0.7 tricks; long trump adds extra
       for (let i = 0; i < trumpCards.length; i++) {
-        if (trumpCards[i] >= 12) tricks += 0.9; // A, K
-        else if (trumpCards[i] >= 10) tricks += 0.6; // Q, J
-        else tricks += 0.25; // low trump still useful for ruffing
+        if (trumpCards[i] >= 12) tricks += 0.9;
+        else if (trumpCards[i] >= 10) tricks += 0.6;
+        else tricks += 0.25;
       }
-      if (trumpCount >= 5) tricks += (trumpCount - 4) * 0.5; // long trump bonus
+      if (trumpCount >= 5) tricks += (trumpCount - 4) * 0.5;
 
-      // Side suit evaluation
+      let voidCount = 0;
       for (const s of SUITS) {
         if (s === trumpSuit) continue;
         const cards = suitHighCards[s];
         cards.sort((a, b) => b - a);
-        if (cards.length === 0) tricks += Math.min(trumpCount, 1) * 0.4; // void = ruffing potential
-        else {
-          if (cards[0] === 14) tricks += 0.85; // Ace
-          if (cards.length > 1 && cards[1] === 13) tricks += 0.5; // King with guard
-          if (cards.length === 1 && cards[0] === 13) tricks += 0.2; // bare king
+        if (cards.length === 0) {
+          voidCount++;
+          tricks += Math.min(trumpCount, 2) * 0.5; // void = ruffing potential
+        } else if (cards.length === 1) {
+          if (cards[0] === 14) tricks += 0.9;
+          else if (cards[0] === 13) tricks += 0.3;
+          else tricks += 0.1; // singleton = future void
+        } else {
+          if (cards[0] === 14) tricks += 0.85;
+          if (cards.length > 1 && cards[1] === 13) tricks += 0.5;
         }
       }
     } else {
-      // No-trump: high cards in long suits are stronger
       for (const s of SUITS) {
         const cards = suitHighCards[s];
         cards.sort((a, b) => b - a);
         const len = cards.length;
-        if (len >= 4) tricks += (len - 3) * 0.4; // length winners
+        if (len >= 5) tricks += (len - 4) * 0.5;
+        else if (len >= 4) tricks += 0.4;
         for (const r of cards) {
           if (r === 14) tricks += 1.0;
           else if (r === 13) tricks += (len >= 2 ? 0.8 : 0.3);
           else if (r === 12) tricks += (len >= 3 ? 0.5 : 0.15);
+          else if (r === 11) tricks += (len >= 4 ? 0.3 : 0.05);
         }
       }
     }
-
     return tricks;
   }
 
+  // ==================== AI BIDDING ====================
   aiBid(player) {
     const hand = this.hands[player];
-
-    // Find best trump suit
     let bestSuit = null;
     let bestTricks = 0;
     for (const s of SUITS) {
@@ -2027,7 +2079,7 @@ class MightyGame {
     }
     const ntTricks = this.aiEvalHand(player, 'notrump');
     let chooseSuit, chooseTricks;
-    if (ntTricks > bestTricks + 0.5) {
+    if (ntTricks > bestTricks + 1.0) {
       chooseSuit = 'notrump';
       chooseTricks = ntTricks;
     } else {
@@ -2035,25 +2087,23 @@ class MightyGame {
       chooseTricks = bestTricks;
     }
 
-    // Convert expected tricks to bid number: ~13 + (tricks - 5)
-    const estimatedBid = Math.round(12.5 + chooseTricks * 0.6);
+    const estimatedBid = Math.round(12 + chooseTricks * 0.65);
     const minBid = this.currentBid.suit ? this.currentBid.number + 1 : 13;
     const maxWilling = Math.min(estimatedBid, 20);
 
-    if (maxWilling >= minBid && chooseTricks >= 4.5) {
+    if (maxWilling >= minBid && chooseTricks >= 5.0) {
       return { number: Math.max(13, minBid), suit: chooseSuit };
     }
     return null;
   }
 
+  // ==================== AI FRIEND SELECTION ====================
   aiSelectFriend(player) {
     const hand = this.hands[player];
     const mighty = this.getMightyCard();
-    // Prefer calling mighty if we don't have it
     if (!hand.includes(mighty)) return { type: 'card', card: mighty };
-    // Then joker
     if (!hand.includes('joker')) return { type: 'card', card: 'joker' };
-    // Then aces of non-trump suits (prefer suits we are short in)
+    // Prefer aces of suits where we're weakest
     const suitCounts = {};
     for (const c of hand) {
       if (c === 'joker') continue;
@@ -2065,44 +2115,56 @@ class MightyGame {
       const ace = `A_${suit}`;
       if (ace !== mighty && !hand.includes(ace)) return { type: 'card', card: ace };
     }
-    // Has everything — go no friend
     return { type: 'none' };
   }
 
+  // ==================== AI EXCHANGE ====================
   aiExchange(player) {
     const hand = [...this.hands[player]];
     const trump = this.trump;
-    // Score each card for value: higher = keep, lower = discard
+    const mighty = this.getMightyCard();
+
     const cardValue = (c) => {
-      if (c === 'joker') return 100;
-      if (this.isMighty(c)) return 100;
+      if (c === 'joker') return 200;
+      if (this.isMighty(c)) return 200;
       const card = parseCard(c);
       let val = RANK_ORDER[card.rank];
-      if (trump && trump !== 'notrump' && card.suit === trump) val += 30;
-      // Point cards are slightly valuable to bury (they count for us)
-      if (isPointCard(c)) val -= 3; // slightly prefer discarding point cards (they auto-count)
+
+      if (trump && trump !== 'notrump' && card.suit === trump) {
+        val += 50; // trump cards very valuable
+      }
+      // Aces in side suits are strong
+      if (card.rank === 'A') val += 15;
+      // Point cards we discard count for us - prefer burying them
+      if (isPointCard(c) && !(trump && trump !== 'notrump' && card.suit === trump)) {
+        val -= 8; // stronger incentive to bury point cards
+      }
+      // Cards in void/short suits: discard to create voids for ruffing
+      const suitCount = hand.filter(h => {
+        if (h === 'joker') return false;
+        return parseCard(h).suit === card.suit;
+      }).length;
+      if (suitCount === 1 && card.rank !== 'A') val -= 5; // keep singleton aces
+      if (suitCount <= 2 && val < 12) val -= 3; // discard low from short suits
       return val;
     };
-    hand.sort((a, b) => cardValue(a) - cardValue(b));
 
-    // Discard 3 weakest, but prefer discarding point cards from weak suits
-    const discards = [];
     const remaining = [...hand];
+    const discards = [];
     for (let d = 0; d < 3; d++) {
-      // Find weakest card in remaining
       remaining.sort((a, b) => cardValue(a) - cardValue(b));
       discards.push(remaining.shift());
     }
     return discards;
   }
 
+  // ==================== AI CARD PLAY ====================
   aiPlayCard(player) {
     const playable = this.getPlayableCards(player);
     if (playable.length === 1) return playable[0];
 
     const isLeading = this.currentTrick.length === 0;
     const isDeclarer = this.isTeamMember(player);
-    const mighty = this.getMightyCard();
     const isLastPlayer = this.currentTrick.length === 4;
 
     if (isLeading) {
@@ -2112,7 +2174,6 @@ class MightyGame {
     const leadCard = parseCard(this.currentTrick[0].card);
     const leadSuit = leadCard.isJoker ? this.jokerDeclaredSuit : leadCard.suit;
 
-    // Count point cards in current trick
     let trickPointCards = 0;
     for (const t of this.currentTrick) {
       if (isPointCard(t.card)) trickPointCards++;
@@ -2120,11 +2181,35 @@ class MightyGame {
 
     const currentBest = Math.max(...this.currentTrick.map(t => this.getCardStrength(t.card, leadSuit)));
 
-    if (isDeclarer) {
-      return this.aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer);
-    } else {
-      return this.aiFollowOppo(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer);
+    // Find who is currently winning
+    let currentWinner = this.currentTrick[0].player;
+    let bestStr = this.getCardStrength(this.currentTrick[0].card, leadSuit);
+    for (let i = 1; i < this.currentTrick.length; i++) {
+      const s = this.getCardStrength(this.currentTrick[i].card, leadSuit);
+      if (s > bestStr) { bestStr = s; currentWinner = this.currentTrick[i].player; }
     }
+    const allyWinning = (isDeclarer && this.isTeamMember(currentWinner)) ||
+                        (!isDeclarer && !this.isTeamMember(currentWinner));
+
+    if (isDeclarer) {
+      return this.aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer, allyWinning);
+    } else {
+      return this.aiFollowOppo(player, playable, leadSuit, currentBest, trickPointCards, isLastPlayer, allyWinning);
+    }
+  }
+
+  // Get minimum card that can beat currentBest
+  getMinWinCard(playable, leadSuit, currentBest) {
+    const winners = playable
+      .filter(c => this.getCardStrength(c, leadSuit) > currentBest)
+      .sort((a, b) => this.getCardStrength(a, leadSuit) - this.getCardStrength(b, leadSuit));
+    return winners.length > 0 ? winners[0] : null;
+  }
+
+  getLowestCard(playable, leadSuit) {
+    return playable.reduce((low, c) =>
+      this.getCardStrength(c, leadSuit) < this.getCardStrength(low, leadSuit) ? c : low
+    );
   }
 
   aiLead(player, playable, isDeclarer) {
@@ -2132,136 +2217,154 @@ class MightyGame {
     const nonSpecial = playable.filter(c => c !== 'joker' && !this.isMighty(c));
 
     if (isDeclarer) {
-      // Lead strong suits to pull out opponents' cards
-      // Lead Ace of a suit to win + gather points
-      const aces = nonSpecial.filter(c => parseCard(c).rank === 'A');
-      if (aces.length > 0) return aces[0];
-      // Lead mighty/joker mid-game for guaranteed wins
-      if (this.trickNumber >= 3 && playable.includes(mighty)) return mighty;
-      if (this.trickNumber >= 2 && playable.includes('joker')) return 'joker';
-      // Lead trump to drain opponent trump
+      // Strategy: Pull trump, then play winners
+
+      // 1. If we have many trumps, lead trump to drain opponents
       if (this.trump && this.trump !== 'notrump') {
-        const trumpCards = nonSpecial.filter(c => parseCard(c).suit === this.trump);
-        if (trumpCards.length > 0) {
-          trumpCards.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
-          return trumpCards[0];
+        const myTrumps = nonSpecial.filter(c => parseCard(c).suit === this.trump);
+        const remainingTrump = this.countRemainingTrump();
+        const othersTrump = remainingTrump - myTrumps.length;
+        if (myTrumps.length >= 2 && othersTrump > 0 && this.trickNumber <= 4) {
+          // Lead highest trump to drain
+          myTrumps.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
+          return myTrumps[0];
         }
       }
-      // Lead strongest
-      if (nonSpecial.length > 0) {
-        nonSpecial.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
-        return nonSpecial[0];
+
+      // 2. Play guaranteed winners (highest remaining in suit)
+      const sureWinners = nonSpecial.filter(c => this.isHighestInSuit(c));
+      if (sureWinners.length > 0) {
+        // Prefer suits with point cards from opponents
+        return sureWinners[0];
       }
-      return playable[0];
+
+      // 3. Lead mighty/joker in mid-late game
+      if (this.trickNumber >= 3 && playable.includes(mighty)) return mighty;
+      if (this.trickNumber >= 2 && playable.includes('joker')) return 'joker';
+
+      // 4. Lead from longest non-trump suit to establish winners
+      const suitGroups = {};
+      for (const c of nonSpecial) {
+        const s = parseCard(c).suit;
+        if (!suitGroups[s]) suitGroups[s] = [];
+        suitGroups[s].push(c);
+      }
+      let bestSuit = null, bestLen = 0;
+      for (const s in suitGroups) {
+        if (suitGroups[s].length > bestLen) { bestLen = suitGroups[s].length; bestSuit = s; }
+      }
+      if (bestSuit) {
+        suitGroups[bestSuit].sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
+        return suitGroups[bestSuit][0];
+      }
+
+      return nonSpecial.length > 0 ? nonSpecial[0] : playable[0];
     } else {
-      // Opposition: lead suits where declarer is likely short, or lead low
-      // Avoid leading trump (helps declarer)
+      // Opposition strategy
       const nonTrump = nonSpecial.filter(c => {
         if (!this.trump || this.trump === 'notrump') return true;
         return parseCard(c).suit !== this.trump;
       });
       const toChoose = nonTrump.length > 0 ? nonTrump : nonSpecial.length > 0 ? nonSpecial : playable;
 
-      // Lead from short suits (opponent might have to follow)
+      // 1. Lead from suits where declarer might be void (force trump usage)
+      // 2. Lead guaranteed winners
+      const sureWins = toChoose.filter(c => this.isHighestInSuit(c));
+      if (sureWins.length > 0) return sureWins[0];
+
+      // 3. Lead from short suits with high cards
       const suitGroups = {};
       for (const c of toChoose) {
         const s = parseCard(c).suit;
         if (!suitGroups[s]) suitGroups[s] = [];
         suitGroups[s].push(c);
       }
-      // Prefer short suits with high cards, or long suits with low cards
-      let bestCard = toChoose[0];
-      let bestScore = -1;
+
+      let bestCard = null, bestScore = -Infinity;
       for (const s in suitGroups) {
         const cards = suitGroups[s];
-        cards.sort((a, b) => RANK_ORDER[parseCard(a).rank] - RANK_ORDER[parseCard(b).rank]);
-        // Short suit with king/ace = lead it to set up winners
-        if (cards.length <= 2) {
-          const high = cards[cards.length - 1];
-          if (RANK_ORDER[parseCard(high).rank] >= 13) {
-            const sc = 10 + RANK_ORDER[parseCard(high).rank];
-            if (sc > bestScore) { bestScore = sc; bestCard = high; }
-          }
+        cards.sort((a, b) => RANK_ORDER[parseCard(b).rank] - RANK_ORDER[parseCard(a).rank]);
+
+        // Short suit with high card: lead high
+        if (cards.length <= 2 && RANK_ORDER[parseCard(cards[0]).rank] >= 13) {
+          const sc = 20 + RANK_ORDER[parseCard(cards[0]).rank];
+          if (sc > bestScore) { bestScore = sc; bestCard = cards[0]; }
         }
-        // Otherwise lead lowest from longest suit
+        // Long suit: lead low to develop
         if (cards.length >= 3) {
+          const sc = 10 + cards.length;
+          if (sc > bestScore) { bestScore = sc; bestCard = cards[cards.length - 1]; }
+        }
+        // Medium suit: lead lowest
+        if (cards.length === 2 && RANK_ORDER[parseCard(cards[0]).rank] < 13) {
           const sc = 5;
-          if (sc > bestScore || bestScore === -1) { bestScore = sc; bestCard = cards[0]; }
+          if (sc > bestScore) { bestScore = sc; bestCard = cards[1]; }
         }
       }
-      // Fallback: lead lowest
-      if (bestScore <= 0) {
-        toChoose.sort((a, b) => RANK_ORDER[parseCard(a).rank] - RANK_ORDER[parseCard(b).rank]);
-        return toChoose[0];
-      }
-      return bestCard;
+
+      if (bestCard) return bestCard;
+      toChoose.sort((a, b) => RANK_ORDER[parseCard(a).rank] - RANK_ORDER[parseCard(b).rank]);
+      return toChoose[0];
     }
   }
 
-  aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPoints, isLast) {
+  aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPoints, isLast, allyWinning) {
     playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
     const myBest = this.getCardStrength(playable[0], leadSuit);
-    const myWorst = this.getCardStrength(playable[playable.length - 1], leadSuit);
 
-    // If we can win and trick has points, win it
-    if (myBest > currentBest) {
-      if (trickPoints > 0 || isLast) {
-        // Win with minimum winning card
-        for (let i = playable.length - 1; i >= 0; i--) {
-          if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
-        }
-        return playable[0];
-      }
-      // No points yet but we're last player — win cheap if possible
+    // Ally is winning — save resources
+    if (allyWinning) {
+      // Dump point cards to ally if safe
       if (isLast) {
-        for (let i = playable.length - 1; i >= 0; i--) {
-          if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
-        }
+        const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
+        if (points.length > 0) return points[0]; // feed points to ally
       }
-      // Early in trick, pointless trick — play low
-      return playable[playable.length - 1];
+      return this.getLowestCard(playable, leadSuit);
     }
-    // Can't win — dump lowest
-    return playable[playable.length - 1];
+
+    if (myBest > currentBest) {
+      if (trickPoints > 0 || isLast || this.trickNumber >= 7) {
+        return this.getMinWinCard(playable, leadSuit, currentBest);
+      }
+      // Early, no points — still try to win with minimum
+      if (this.trickNumber <= 3) return this.getMinWinCard(playable, leadSuit, currentBest);
+      return this.getLowestCard(playable, leadSuit);
+    }
+    return this.getLowestCard(playable, leadSuit);
   }
 
-  aiFollowOppo(player, playable, leadSuit, currentBest, trickPoints, isLast) {
+  aiFollowOppo(player, playable, leadSuit, currentBest, trickPoints, isLast, allyWinning) {
     playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
     const myBest = this.getCardStrength(playable[0], leadSuit);
 
-    // Check if current trick winner is declarer's team
-    let declarerWinning = false;
-    if (this.currentTrick.length > 0) {
-      let bestP = this.currentTrick[0].player;
-      let bestS = this.getCardStrength(this.currentTrick[0].card, leadSuit);
-      for (let i = 1; i < this.currentTrick.length; i++) {
-        const s = this.getCardStrength(this.currentTrick[i].card, leadSuit);
-        if (s > bestS) { bestS = s; bestP = this.currentTrick[i].player; }
+    if (allyWinning) {
+      // Our team winning — dump point cards if it's safe
+      if (isLast || this.currentTrick.length >= 3) {
+        const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
+        if (points.length > 0) return points[0];
       }
-      declarerWinning = this.isTeamMember(bestP);
+      return this.getLowestCard(playable, leadSuit);
     }
 
-    if (declarerWinning && myBest > currentBest && trickPoints > 0) {
-      // Declarer is winning a pointy trick — try to steal it
-      // Use minimum winning card
-      for (let i = playable.length - 1; i >= 0; i--) {
-        if (this.getCardStrength(playable[i], leadSuit) > currentBest) return playable[i];
+    // Declarer team is winning
+    if (myBest > currentBest) {
+      if (trickPoints > 0) {
+        // Must steal - use minimum winning card
+        return this.getMinWinCard(playable, leadSuit, currentBest);
       }
-      return playable[0];
+      // No points but late game — still try to win to prevent declarer
+      if (isLast && this.trickNumber >= 5) {
+        return this.getMinWinCard(playable, leadSuit, currentBest);
+      }
+      // Can win but no points early — consider if worth it
+      if (this.trickNumber >= 3) {
+        return this.getMinWinCard(playable, leadSuit, currentBest);
+      }
     }
 
-    if (!declarerWinning) {
-      // Our team winning — dump point cards if possible (they'll count for us)
-      const pointCards = playable.filter(c => isPointCard(c));
-      if (pointCards.length > 0 && trickPoints < 3) {
-        return pointCards[0]; // give points to our winning teammate
-      }
-      // Play lowest to not overtake
-      return playable[playable.length - 1];
-    }
-
-    // Declarer winning, no points — save big cards, play lowest
-    return playable[playable.length - 1];
+    // Can't win or not worth winning — play lowest, avoid wasting trumps
+    // But if we must play trump, play lowest trump
+    return this.getLowestCard(playable, leadSuit);
   }
 
   aiShouldJokerCall(player) {
@@ -2269,9 +2372,11 @@ class MightyGame {
     if (!this.hands[player].includes(jcCard)) return false;
     if (this.trickNumber === 0) return false;
     if (this.isTeamMember(player)) return false;
-    // Call joker when there are point cards at stake or mid-game
-    if (this.trickNumber >= 3 && this.trickNumber <= 7) return true;
-    return Math.random() > 0.3; // 70% chance otherwise
+    // Call joker when there are point cards at stake or mid-late game
+    if (this.trickNumber >= 3 && this.trickNumber <= 8) return true;
+    // Late game: always call
+    if (this.trickNumber >= 7) return true;
+    return Math.random() > 0.4;
   }
 }
 
@@ -2557,6 +2662,7 @@ async function startGame() {
   await showShuffleAnimation();
 
   game.deal();
+  game.initCardCounter();
 
   // 카드를 한 장씩 돌려주는 연출
   const handContainer = $('hand-container');
@@ -2620,6 +2726,12 @@ async function startGame() {
 
     await doTrick(t);
 
+    // Record played cards for AI card counting
+    const trickLeadCard = parseCard(game.currentTrick[0].card);
+    const trickLeadSuit = trickLeadCard.isJoker ? game.jokerDeclaredSuit : trickLeadCard.suit;
+    for (const play of game.currentTrick) {
+      game.recordPlayedCard(play.card, play.player, trickLeadSuit);
+    }
     const winner = game.determineTrickWinner();
     await showMessage(`${game.playerNames[winner]} 트릭 승리!`, 1600);
     SFX.play('trick');
