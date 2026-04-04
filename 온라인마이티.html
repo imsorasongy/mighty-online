@@ -743,6 +743,7 @@ canvas.card-canvas { image-rendering: auto; }
     <button class="menu-btn" id="btn-solo">1인 플레이 시작</button>
     <button class="menu-btn" id="btn-multi">다인 플레이 시작</button>
     <button class="menu-btn" id="btn-credits">만든 사람들</button>
+    <button class="menu-btn" id="btn-version">버전 정보</button>
   </div>
   <div class="sub-panel" id="panel-multi">
     <h2>다인 플레이</h2>
@@ -754,6 +755,59 @@ canvas.card-canvas { image-rendering: auto; }
     <p style="font-size: 28px; color: #FFD700; margin: 20px 0;">박대영</p>
     <p style="font-size: 14px; color: #888;">Powered by Web Audio API</p>
     <button class="close-btn" onclick="document.getElementById('panel-credits').classList.remove('visible')">확인</button>
+  </div>
+  <div class="sub-panel" id="panel-version" style="max-height:80vh;overflow-y:auto;text-align:left">
+    <h2 style="text-align:center">버전 정보</h2>
+    <p style="text-align:center;font-size:22px;color:#FFD700;font-weight:bold;margin-bottom:16px">v 0.15</p>
+    <div style="font-size:13px;color:#ccc;line-height:1.7">
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.15 (2026.04.05)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>AI 마지막 턴 조커 낭비 수정</li>
+        <li>AI 입찰 적극성 밸런스 조정</li>
+        <li>조커가 이미 나온 후 조커콜 방지</li>
+        <li>버전 정보 메뉴 추가</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.14 (2026.04.05)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>AI 교환 후 기루다/공약 변경 기능</li>
+        <li>AI 입찰 적극성 강화</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.13 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>조커콜 규칙 수정 (조커 강제/마이티 보호)</li>
+        <li>딜미스 규칙 구현</li>
+        <li>AI 첫 턴 조커 낭비 방지</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.12 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>모바일 UI 대폭 개선 (레이아웃 재배치)</li>
+        <li>카드/팝업 겹침 해결</li>
+        <li>기루다 변경 시 공약 하한 고정</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.11 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>AI 대폭 개선 (카드 카운팅, 공수 분리 전략)</li>
+        <li>모바일 반응형 UI 추가</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.10 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>프렌드 선택: 사람 지정 기능 추가</li>
+        <li>프렌드 선택: 마이티/조커 프렌드 추가</li>
+        <li>공약 올리기 기능 추가</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.09 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>Render.com 클라우드 배포</li>
+        <li>외부 인터넷 접속 지원</li>
+      </ul>
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.08 (2026.04.04)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>온라인 멀티플레이어 기능</li>
+        <li>로비 시스템 (방 만들기/참가)</li>
+        <li>원격 플레이어 교환/프렌드/기루다 처리</li>
+      </ul>
+    </div>
+    <button class="close-btn" onclick="document.getElementById('panel-version').classList.remove('visible')">확인</button>
   </div>
   <div class="footer">Card Game Since 1970s</div>
 </div>
@@ -3882,6 +3936,10 @@ async function doGameOver() {
 
   document.getElementById('btn-credits').addEventListener('click', () => {
     document.getElementById('panel-credits').classList.add('visible');
+  });
+
+  document.getElementById('btn-version').addEventListener('click', () => {
+    document.getElementById('panel-version').classList.add('visible');
   });
 })();
 
