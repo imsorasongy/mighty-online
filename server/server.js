@@ -3,7 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
-const localtunnel = require('localtunnel');
+let localtunnel;
+try { localtunnel = require('localtunnel'); } catch (e) { /* optional */ }
 
 const app = express();
 const server = http.createServer(app);
@@ -14,9 +15,16 @@ const io = new Server(server, {
 // Serve static files from parent directory
 app.use(express.static(path.join(__dirname, '..')));
 
-// Serve 온라인마이티.html as the default page
+// Serve the main page (try index.html first, then Korean filename)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', '온라인마이티.html'));
+  const indexPath = path.join(__dirname, '..', 'index.html');
+  const koreanPath = path.join(__dirname, '..', '온라인마이티.html');
+  const fs = require('fs');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.sendFile(koreanPath);
+  }
 });
 
 // 터널 URL 저장
@@ -177,26 +185,31 @@ server.listen(PORT, '0.0.0.0', async () => {
     }
   }
 
-  // 외부 접속용 터널 생성
-  try {
-    console.log('');
-    console.log('  Creating internet tunnel...');
-    const tunnel = await localtunnel({ port: PORT });
-    tunnelUrl = tunnel.url;
-    console.log(`  [Internet]  ${tunnelUrl}`);
-    console.log('');
-    console.log('  Share the Internet URL with friends!');
+  // 외부 접속용 터널 생성 (로컬 환경에서만)
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (!isProduction && localtunnel) {
+    try {
+      console.log('');
+      console.log('  Creating internet tunnel...');
+      const tunnel = await localtunnel({ port: PORT });
+      tunnelUrl = tunnel.url;
+      console.log(`  [Internet]  ${tunnelUrl}`);
+      console.log('');
+      console.log('  Share the Internet URL with friends!');
 
-    tunnel.on('close', () => {
-      console.log('  Tunnel closed.');
-      tunnelUrl = null;
-    });
-    tunnel.on('error', (err) => {
-      console.log('  Tunnel error:', err.message);
-    });
-  } catch (e) {
-    console.log('  Tunnel failed:', e.message);
-    console.log('  (LAN access still works)');
+      tunnel.on('close', () => {
+        console.log('  Tunnel closed.');
+        tunnelUrl = null;
+      });
+      tunnel.on('error', (err) => {
+        console.log('  Tunnel error:', err.message);
+      });
+    } catch (e) {
+      console.log('  Tunnel failed:', e.message);
+      console.log('  (LAN access still works)');
+    }
+  } else if (isProduction) {
+    console.log('  Running in production (cloud)');
   }
 
   console.log('========================================');
