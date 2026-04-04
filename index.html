@@ -2110,15 +2110,15 @@ class MightyGame {
 
     // 마이티/조커 보유 시 트릭 기대치 보너스
     const mighty = chooseSuit === 'spades' ? 'A_diamonds' : 'A_spades';
-    if (hand.includes(mighty)) chooseTricks += 0.5;
-    if (hand.includes('joker')) chooseTricks += 0.3;
+    if (hand.includes(mighty)) chooseTricks += 0.4;
+    if (hand.includes('joker')) chooseTricks += 0.2;
 
-    const estimatedBid = Math.round(12 + chooseTricks * 0.7);
+    const estimatedBid = Math.round(12 + chooseTricks * 0.65);
     const minBid = this.currentBid.suit ? this.currentBid.number + 1 : 13;
     const maxWilling = Math.min(estimatedBid, 20);
 
-    // 입찰 기준 완화: 4트릭 이상이면 도전
-    if (maxWilling >= minBid && chooseTricks >= 4.0) {
+    // 입찰 기준: 4.5트릭 이상이면 도전
+    if (maxWilling >= minBid && chooseTricks >= 4.5) {
       return { number: Math.max(13, minBid), suit: chooseSuit };
     }
     return null;
@@ -2459,9 +2459,10 @@ class MightyGame {
     if (!this.hands[player].includes(jcCard)) return false;
     if (this.trickNumber === 0) return false;
     if (this.isTeamMember(player)) return false;
+    // 조커가 이미 사용되었으면 조커콜 불가
+    if (this.usedCards && this.usedCards.has('joker')) return false;
     // Call joker when there are point cards at stake or mid-late game
     if (this.trickNumber >= 3 && this.trickNumber <= 8) return true;
-    // Late game: always call
     if (this.trickNumber >= 7) return true;
     return Math.random() > 0.4;
   }
@@ -3450,7 +3451,8 @@ async function doTrick(trickNum) {
     if (isLocalPlayer(currentPlayer)) {
       // === 로컬 플레이어 ===
       const jcCard = game.getJokerCallCard();
-      const canJC = trickNum > 0 && trickNum < 9 && i === 0 && game.hands[localPlayerIndex].includes(jcCard);
+      const jokerAlive = !game.usedCards || !game.usedCards.has('joker');
+      const canJC = trickNum > 0 && trickNum < 9 && i === 0 && jokerAlive && game.hands[localPlayerIndex].includes(jcCard);
       if (canJC) {
         $('joker-call-btn').style.display = 'block';
       }
@@ -3480,7 +3482,8 @@ async function doTrick(trickNum) {
       if (multiplayerMode.isHost) {
         HostAdapter.broadcastState();
         const playable = game.getPlayableCards(currentPlayer);
-        const canJokerCall = trickNum > 0 && trickNum < 9 && i === 0 && game.hands[currentPlayer].includes(game.getJokerCallCard());
+        const jokerAliveR = !game.usedCards || !game.usedCards.has('joker');
+        const canJokerCall = trickNum > 0 && trickNum < 9 && i === 0 && jokerAliveR && game.hands[currentPlayer].includes(game.getJokerCallCard());
         const res = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-play', { playableCards: playable, canJokerCall });
         let chosenCard;
         if (res && !res.aiTakeover && res.card) {
@@ -3617,7 +3620,8 @@ async function checkDealMiss() {
 }
 
 game.doJokerCall = function() {
-  if (game.currentTrick.length === 0 && game.trickNumber > 0 && game.trickNumber < 9) {
+  const jokerAlreadyUsed = game.usedCards && game.usedCards.has('joker');
+  if (game.currentTrick.length === 0 && game.trickNumber > 0 && game.trickNumber < 9 && !jokerAlreadyUsed) {
     const jcCard = game.getJokerCallCard();
     if (game.hands[localPlayerIndex].includes(jcCard)) {
       game.jokerCalled = true;
