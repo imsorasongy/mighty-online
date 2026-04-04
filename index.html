@@ -2180,8 +2180,21 @@ class MightyGame {
   }
 
   // ==================== AI CARD PLAY ====================
+  // 조커가 효과 없는 턴(첫 턴, 마지막 턴)에는 조커를 피함
+  aiFilterJokerWaste(playable) {
+    if (this.trickNumber === 0 || this.trickNumber === 9) {
+      const noJoker = playable.filter(c => c !== 'joker');
+      if (noJoker.length > 0) return noJoker;
+    }
+    return playable;
+  }
+
   aiPlayCard(player) {
-    const playable = this.getPlayableCards(player);
+    let playable = this.getPlayableCards(player);
+    if (playable.length === 1) return playable[0];
+
+    // 조커가 효과 없는 턴에는 조커 사용 방지
+    playable = this.aiFilterJokerWaste(playable);
     if (playable.length === 1) return playable[0];
 
     const isLeading = this.currentTrick.length === 0;
