@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server/server.js",
     "build": "cd server && npm install",
+    "postinstall": "cd server && npm install",
     "electron": "npx electron electron-main.js",
     "package": "npx @electron/packager . MightyOnline --platform=win32 --arch=x64 --overwrite --ignore=\"(server|dist|\\.git|render\\.yaml|마이티\\.html|온라인마이티\\.bat|\\.gitignore)\""
   },
