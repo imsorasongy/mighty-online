@@ -629,7 +629,7 @@ canvas.card-canvas { image-rendering: auto; }
   .player-area { z-index: 10; }
   .player-avatar { width: 36px; height: 36px; font-size: 20px; margin-bottom: 2px; border-width: 2px; }
   .player-area .name-tag { font-size: 11px; padding: 2px 8px; border-radius: 5px; }
-  .player-area .score-display { font-size: 10px; }
+  .player-area .score-display { display: none; }
 
   #player-0 { bottom: 5px; left: 50%; transform: translateX(-50%); }
   #player-1 { left: 5px; top: 35%; transform: none; }
@@ -660,10 +660,15 @@ canvas.card-canvas { image-rendering: auto; }
   /* Joker call button */
   #joker-call-btn { bottom: 120px; font-size: 14px; padding: 8px 16px; }
 
-  /* Scoreboard */
-  #scoreboard { bottom: 8px; right: 8px; padding: 6px 10px; font-size: 11px; min-width: 120px; }
-  #scoreboard h3 { font-size: 12px; margin-bottom: 4px; }
-  #scoreboard .sb-row { font-size: 11px; padding: 2px 0; }
+  /* Scoreboard - 모바일에서 좌측으로 이동, 카드와 겹치지 않게 */
+  #scoreboard {
+    bottom: auto; right: auto;
+    top: 100px; left: 8px;
+    padding: 4px 8px; font-size: 10px; min-width: 90px;
+    opacity: 0.85; z-index: 85;
+  }
+  #scoreboard h3 { font-size: 11px; margin-bottom: 2px; }
+  #scoreboard .sb-row { font-size: 10px; padding: 1px 0; }
 
   /* Won cards */
   .won-cards { max-width: 120px; }
