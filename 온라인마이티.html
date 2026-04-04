@@ -2242,6 +2242,14 @@ class MightyGame {
     return playable;
   }
 
+  // 마지막 턴에 조커가 낭비되지 않도록, 8~9턴 리드 시 조커를 적극 사용
+  aiShouldUseJokerNow(player, playable) {
+    if (!playable.includes('joker')) return false;
+    // 남은 턴이 2턴 이하이고 리드라면 지금 조커 사용
+    if (this.trickNumber >= 8 && this.currentTrick.length === 0) return true;
+    return false;
+  }
+
   aiPlayCard(player) {
     let playable = this.getPlayableCards(player);
     if (playable.length === 1) return playable[0];
@@ -2294,7 +2302,18 @@ class MightyGame {
   }
 
   getLowestCard(playable, leadSuit) {
-    return playable.reduce((low, c) =>
+    // 조커가 효과 없는 턴에서는 조커를 "가장 약한 카드"로 선택하지 않음
+    // (조커는 효과 있을 때 써야 하므로)
+    let candidates = playable;
+    if (playable.length > 1 && playable.includes('joker')) {
+      const jokerStr = this.getCardStrength('joker', leadSuit);
+      if (jokerStr < 0) {
+        // 조커 효과 없음 → 조커 말고 다른 카드 중 가장 약한 카드 선택
+        candidates = playable.filter(c => c !== 'joker');
+        if (candidates.length === 0) candidates = playable;
+      }
+    }
+    return candidates.reduce((low, c) =>
       this.getCardStrength(c, leadSuit) < this.getCardStrength(low, leadSuit) ? c : low
     );
   }
@@ -2302,6 +2321,11 @@ class MightyGame {
   aiLead(player, playable, isDeclarer) {
     const mighty = this.getMightyCard();
     const nonSpecial = playable.filter(c => c !== 'joker' && !this.isMighty(c));
+
+    // 마지막 턴 근처에 조커가 남아있으면 지금 사용 (낭비 방지)
+    if (this.aiShouldUseJokerNow(player, playable)) {
+      return 'joker';
+    }
 
     if (isDeclarer) {
       // Strategy: Pull trump, then play winners
