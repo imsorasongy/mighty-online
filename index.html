@@ -2108,14 +2108,67 @@ class MightyGame {
       chooseTricks = bestTricks;
     }
 
-    const estimatedBid = Math.round(12 + chooseTricks * 0.65);
+    // 마이티/조커 보유 시 트릭 기대치 보너스
+    const mighty = chooseSuit === 'spades' ? 'A_diamonds' : 'A_spades';
+    if (hand.includes(mighty)) chooseTricks += 0.5;
+    if (hand.includes('joker')) chooseTricks += 0.3;
+
+    const estimatedBid = Math.round(12 + chooseTricks * 0.7);
     const minBid = this.currentBid.suit ? this.currentBid.number + 1 : 13;
     const maxWilling = Math.min(estimatedBid, 20);
 
-    if (maxWilling >= minBid && chooseTricks >= 5.0) {
+    // 입찰 기준 완화: 4트릭 이상이면 도전
+    if (maxWilling >= minBid && chooseTricks >= 4.0) {
       return { number: Math.max(13, minBid), suit: chooseSuit };
     }
     return null;
+  }
+
+  // ==================== AI 교환 후 기루다/공약 변경 ====================
+  aiPostExchangeDecision(player) {
+    const hand = this.hands[player];
+    const origTrump = this.trump;
+    const origBid = this.currentBid.number;
+
+    // 교환 후 각 기루다로 재평가
+    let bestSuit = origTrump;
+    let bestTricks = this.aiEvalHand(player, origTrump);
+
+    for (const s of SUITS) {
+      if (s === origTrump) continue;
+      const t = this.aiEvalHand(player, s);
+      // 기루다 변경 시 +2 패널티 감안해도 이득인지
+      if (t > bestTricks + 1.5) {
+        bestTricks = t;
+        bestSuit = s;
+      }
+    }
+    const ntTricks = this.aiEvalHand(player, 'notrump');
+    // 노트럼프 변경 시 +1 패널티
+    if (origTrump !== 'notrump' && ntTricks > bestTricks + 1.0) {
+      bestTricks = ntTricks;
+      bestSuit = 'notrump';
+    }
+
+    let newBid = origBid;
+    // 기루다 변경 시 공약 자동 상승
+    if (bestSuit !== origTrump) {
+      if (origTrump !== 'notrump' && bestSuit === 'notrump') {
+        newBid = origBid + 1;
+      } else {
+        newBid = origBid + 2;
+      }
+      this.trump = bestSuit;
+    }
+
+    // 교환 후 기대 트릭이 현재 공약보다 훨씬 높으면 공약 올리기
+    const estimatedWins = Math.round(12 + bestTricks * 0.7);
+    if (estimatedWins > newBid + 1) {
+      newBid = Math.min(newBid + 1, Math.min(estimatedWins - 1, 20));
+    }
+
+    this.currentBid.number = Math.min(newBid, 20);
+    return { trumpChanged: bestSuit !== origTrump, newTrump: bestSuit, newBid: this.currentBid.number };
   }
 
   // ==================== AI FRIEND SELECTION ====================
@@ -3175,6 +3228,19 @@ async function doExchange() {
     game.hands[game.declarer] = allCards.filter(c => !discards.includes(c));
     updateAIHands();
     await showMessage(`${game.playerNames[game.declarer]}이(가) 카드를 교환했습니다`, 1400);
+
+    // AI 기루다/공약 변경 판단
+    const prevBid = game.currentBid.number;
+    const prevTrump = game.trump;
+    const aiDecision = game.aiPostExchangeDecision(game.declarer);
+    if (aiDecision.trumpChanged) {
+      updateTrumpIndicator();
+      const suitText = aiDecision.newTrump === 'notrump' ? 'NT' : SUIT_SYMBOLS[aiDecision.newTrump];
+      await showMessage(`${game.playerNames[game.declarer]}: 기루다 변경! ${game.currentBid.number} ${suitText}`, 1800);
+    } else if (game.currentBid.number > prevBid) {
+      const suitText = game.trump === 'notrump' ? 'NT' : SUIT_SYMBOLS[game.trump];
+      await showMessage(`${game.playerNames[game.declarer]}: 공약 상향! ${game.currentBid.number} ${suitText}`, 1400);
+    }
   }
 }
 
