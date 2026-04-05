@@ -2942,8 +2942,11 @@ async function startGame() {
     await delay(100);
   }
 
-  // 카드 확인 시간
-  await delay(2000);
+  // 게스트에게 카드 전송 (게스트도 배분 연출 시작)
+  if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
+
+  // 카드 확인 시간 (게스트 배분 연출 완료 대기 포함)
+  await delay(3000);
 
   // 딜미스 체크 (카드 배분 후)
   const dealMissChecked = await checkDealMiss();
