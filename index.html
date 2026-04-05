@@ -625,18 +625,21 @@ canvas.card-canvas { image-rendering: auto; }
     border-top: none;
   }
 
-  /* ===== 상단 우측: 효과음/BGM + 트릭 + 여당야당공약 ===== */
+  /* ===== 상단 우측: 효과음/BGM ===== */
   #bgm-btn, #sfx-btn {
     top: 40px; font-size: 10px; padding: 2px 6px;
     min-width: 50px; height: 22px; line-height: 14px;
     border-radius: 0 0 6px 6px; border-top: none;
+    left: auto;
   }
   #sfx-btn { right: 56px; }
   #bgm-btn { right: 0; border-radius: 0 0 0 6px; }
 
+  /* ===== 트릭/포인트: 우측 효과음 아래 ===== */
   #trick-counter, #point-counter {
     padding: 3px 6px; font-size: 10px;
     border-radius: 6px; left: auto;
+    top: auto; right: auto;
   }
   #trick-counter { top: 64px; right: 56px; }
   #point-counter { top: 64px; right: 0; border-radius: 6px 0 0 6px; }
@@ -647,16 +650,21 @@ canvas.card-canvas { image-rendering: auto; }
   .player-area .name-tag { font-size: 10px; padding: 2px 6px; border-radius: 5px; }
   .player-area .score-display { display: none; }
 
+  /* 모바일: AI 플레이어 영역 폭을 모바일 카드 크기에 맞게 축소 */
+  #player-1, #player-2, #player-3, #player-4 {
+    width: 155px; /* 20px * 1 + 15px * 9 = 155px (모바일 10장) */
+  }
+
   /* Player 0 (나) - 맨 아래 */
-  #player-0 { bottom: 2px; left: 50%; transform: translateX(-50%); }
+  #player-0 { bottom: 2px; left: 50%; transform: translateX(-50%); width: auto; }
   /* Player 2 (시진핑) - 상단 좌측 */
-  #player-2 { left: 16%; top: 24%; transform: none; }
+  #player-2 { left: 2%; top: 20%; transform: none; }
   /* Player 3 (푸틴) - 상단 우측 */
-  #player-3 { right: 16%; top: 24%; transform: none; }
+  #player-3 { right: 2%; top: 20%; transform: none; }
   /* Player 1 (트럼프) - 중단 좌측 */
-  #player-1 { left: 4px; top: 46%; transform: none; }
+  #player-1 { left: 2%; top: 44%; transform: none; }
   /* Player 4 (김정은) - 중단 우측 */
-  #player-4 { right: 4px; top: 46%; transform: none; }
+  #player-4 { right: 2%; top: 44%; transform: none; }
 
   /* ===== AI 핸드 카드 ===== */
   .ai-hand canvas { width: 20px !important; height: 28px !important; }
