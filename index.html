@@ -772,8 +772,13 @@ canvas.card-canvas { image-rendering: auto; }
   </div>
   <div class="sub-panel" id="panel-version" style="max-height:80vh;overflow-y:auto;text-align:left">
     <h2 style="text-align:center">버전 정보</h2>
-    <p style="text-align:center;font-size:22px;color:#FFD700;font-weight:bold;margin-bottom:16px">v 0.17</p>
+    <p style="text-align:center;font-size:22px;color:#FFD700;font-weight:bold;margin-bottom:16px">v 0.18</p>
     <div style="font-size:13px;color:#ccc;line-height:1.7">
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.18 (2026.04.05)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>게임 중 시작화면으로 복귀 기능 추가</li>
+        <li>시작화면 복귀 시 게임 완전 종료 후 재시작</li>
+      </ul>
       <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.17 (2026.04.05)</p>
       <ul style="margin:4px 0 8px 18px;color:#aaa">
         <li>PC UI: 효과음/BGM 좌측 상단, 트릭/점수 우측 상단 배치</li>
@@ -844,7 +849,7 @@ canvas.card-canvas { image-rendering: auto; }
       <div class="logo">MIGHTY</div>
       <div class="info" id="game-info">5인 마이티</div>
     </div>
-    <button id="btn-to-main" onclick="goToMain()" style="background:rgba(255,255,255,0.1);border:1px solid #888;color:#ccc;padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:bold;transition:all 0.15s" onmouseover="this.style.borderColor='#FFD700';this.style.color='#FFD700'" onmouseout="this.style.borderColor='#888';this.style.color='#ccc'">메인화면</button>
+    <button id="btn-to-main" onclick="goToMain()" style="background:rgba(255,255,255,0.1);border:1px solid #888;color:#ccc;padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:bold;transition:all 0.15s" onmouseover="this.style.borderColor='#FFD700';this.style.color='#FFD700'" onmouseout="this.style.borderColor='#888';this.style.color='#ccc'">시작화면으로</button>
   </div>
 
   <button id="sfx-btn" class="on" onclick="SFX.toggle()">효과음 ON</button>
@@ -3732,16 +3737,13 @@ async function checkDealMiss() {
 }
 
 function goToMain() {
-  if (!confirm('게임을 종료하고 메인화면으로 돌아가시겠습니까?')) return;
+  if (!confirm('게임을 종료하고 시작화면으로 돌아가시겠습니까?')) return;
   // 네트워크 연결 해제
   if (typeof Network !== 'undefined' && Network.disconnect) Network.disconnect();
-  // 게임 화면 숨기고 타이틀 표시
-  document.getElementById('game-container').style.display = 'none';
-  const titleScreen = document.getElementById('title-screen');
-  titleScreen.style.display = 'flex';
-  titleScreen.style.opacity = '1';
   // BGM 정지
   if (typeof BGM !== 'undefined' && BGM.stop) BGM.stop();
+  // 완전히 새로고침해서 처음부터 시작
+  window.location.reload();
 }
 
 game.doJokerCall = function() {
