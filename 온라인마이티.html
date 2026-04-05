@@ -61,7 +61,7 @@ body {
 }
 #trump-indicator.visible { display: flex; align-items: center; gap: 10px; }
 
-/* Player positions */
+/* Player positions - 캐릭터 위치 고정 */
 .player-area {
   position: absolute;
   display: flex;
@@ -113,14 +113,14 @@ body {
 
 /* Player 0 (bottom, human) */
 #player-0 { bottom: 10px; left: 50%; transform: translateX(-50%); }
-/* Player 1 (left) */
-#player-1 { left: 40px; top: 50%; transform: translateY(-50%); }
+/* Player 1 (left) - 고정 위치 */
+#player-1 { left: 40px; top: 30%; }
 /* Player 2 (top-left) */
 #player-2 { left: 22%; top: 62px; }
 /* Player 3 (top-right) */
 #player-3 { right: 22%; top: 62px; }
-/* Player 4 (right) */
-#player-4 { right: 40px; top: 50%; transform: translateY(-50%); }
+/* Player 4 (right) - 고정 위치 */
+#player-4 { right: 40px; top: 30%; }
 
 /* Hand cards */
 #hand-container {
@@ -150,6 +150,11 @@ body {
 /* AI hand (face-down cards) */
 .ai-hand {
   display: flex;
+  margin-top: 2px;
+}
+/* AI 플레이어 영역: 카드 10장 너비로 고정 (캐릭터 위치 고정) */
+#player-1, #player-2, #player-3, #player-4 {
+  width: 270px;  /* 36px * 1 + 26px * 9 = 270px (10장) */
 }
 
 /* Center play area */
@@ -188,8 +193,8 @@ body {
   to { transform: scale(1) rotate(0); opacity: 1; }
 }
 
-/* Point counter */
-#point-counter {
+/* Trick counter - 우측 상단 위 */
+#trick-counter {
   position: absolute;
   top: 62px;
   right: 20px;
@@ -203,13 +208,13 @@ body {
   display: none;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
-#point-counter.visible { display: block; }
+#trick-counter.visible { display: block; }
 
-/* Trick counter */
-#trick-counter {
+/* Point counter - 우측 상단 아래 (트릭 아래) */
+#point-counter {
   position: absolute;
-  top: 62px;
-  left: 20px;
+  top: 120px;
+  right: 20px;
   background: rgba(0,0,0,0.8);
   border: 2px solid #555;
   border-radius: 10px;
@@ -220,7 +225,7 @@ body {
   display: none;
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
 }
-#trick-counter.visible { display: block; }
+#point-counter.visible { display: block; }
 
 /* Dialog / Modal */
 .modal-overlay {
@@ -465,8 +470,8 @@ canvas.card-canvas { image-rendering: auto; }
   line-height: 18px;
   text-align: center;
 }
-#bgm-btn { right: 180px; }
-#sfx-btn { right: 290px; }
+#sfx-btn { left: 20px; }
+#bgm-btn { left: 130px; }
 #bgm-btn:hover, #sfx-btn:hover { border-color: #FFD700; color: #FFD700; }
 #bgm-btn.on, #sfx-btn.on { border-color: #4caf50; color: #4caf50; }
 
@@ -842,30 +847,30 @@ canvas.card-canvas { image-rendering: auto; }
   </div>
   <div class="player-area" id="player-1">
     <div class="player-avatar" id="avatar-1"></div>
-    <div class="ai-hand" id="ai-hand-1"></div>
     <div class="name-tag" id="name-1">트럼프</div>
     <div class="score-display" id="total-1">지지율 20%</div>
+    <div class="ai-hand" id="ai-hand-1"></div>
     <div class="won-cards" id="won-1"></div>
   </div>
   <div class="player-area" id="player-2">
     <div class="player-avatar" id="avatar-2"></div>
-    <div class="ai-hand" id="ai-hand-2"></div>
     <div class="name-tag" id="name-2">시진핑</div>
     <div class="score-display" id="total-2">지지율 20%</div>
+    <div class="ai-hand" id="ai-hand-2"></div>
     <div class="won-cards" id="won-2"></div>
   </div>
   <div class="player-area" id="player-3">
     <div class="player-avatar" id="avatar-3"></div>
-    <div class="ai-hand" id="ai-hand-3"></div>
     <div class="name-tag" id="name-3">푸틴</div>
     <div class="score-display" id="total-3">지지율 20%</div>
+    <div class="ai-hand" id="ai-hand-3"></div>
     <div class="won-cards" id="won-3"></div>
   </div>
   <div class="player-area" id="player-4">
     <div class="player-avatar" id="avatar-4"></div>
-    <div class="ai-hand" id="ai-hand-4"></div>
     <div class="name-tag" id="name-4">김정은</div>
     <div class="score-display" id="total-4">지지율 20%</div>
+    <div class="ai-hand" id="ai-hand-4"></div>
     <div class="won-cards" id="won-4"></div>
   </div>
 
@@ -2835,16 +2840,6 @@ async function startGame() {
   game.deal();
   game.initCardCounter();
 
-  // 딜미스 체크
-  const dealMissChecked = await checkDealMiss();
-  if (dealMissChecked) {
-    // 딜미스 선언됨 - 다시 딜
-    $('hand-container').innerHTML = '';
-    for (let p = 1; p < 5; p++) { const el = $(`ai-hand-${p}`); if (el) el.innerHTML = ''; }
-    startGame();
-    return;
-  }
-
   // 카드를 한 장씩 돌려주는 연출
   const handContainer = $('hand-container');
   handContainer.innerHTML = '';
@@ -2855,9 +2850,15 @@ async function startGame() {
     if (el) el.innerHTML = '';
   }
 
+  const bw = isMobile() ? 20 : 36;
+  const bh = isMobile() ? 28 : 52;
+  const bml = isMobile() ? '-5px' : '-10px';
+  const cw = isMobile() ? 46 : 80;
+  const ch = isMobile() ? 67 : 116;
+
   for (let i = 0; i < 10; i++) {
     // 플레이어 카드 한 장 추가
-    const cardEl = renderCard(game.hands[localPlayerIndex][i], 80, 116);
+    const cardEl = renderCard(game.hands[localPlayerIndex][i], cw, ch);
     cardEl.classList.add('hand-card');
     cardEl.dataset.card = game.hands[localPlayerIndex][i];
     cardEl.dataset.index = i;
@@ -2867,8 +2868,8 @@ async function startGame() {
     for (let p = 0; p < 5; p++) {
       if (p === localPlayerIndex) continue;
       if (i < game.hands[p].length) {
-        const back = renderCardBack(36, 52);
-        back.style.marginLeft = i === 0 ? '0' : '-10px';
+        const back = renderCardBack(bw, bh);
+        back.style.marginLeft = i === 0 ? '0' : bml;
         const ael = $(`ai-hand-${p}`);
         if (ael) ael.appendChild(back);
       }
@@ -2876,6 +2877,15 @@ async function startGame() {
 
     SFX.play('deal');
     await delay(100);
+  }
+
+  // 딜미스 체크 (카드 배분 후)
+  const dealMissChecked = await checkDealMiss();
+  if (dealMissChecked) {
+    $('hand-container').innerHTML = '';
+    for (let p = 1; p < 5; p++) { const el = $(`ai-hand-${p}`); if (el) el.innerHTML = ''; }
+    startGame();
+    return;
   }
 
   await doBidding();
