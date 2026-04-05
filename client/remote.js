@@ -92,8 +92,10 @@ const RemoteAdapter = {
     updateWonCardsDisplay();
     updateScoreboard();
 
-    for (let i = 0; i < 5; i++) {
-      document.getElementById(`total-${i}`).textContent = '지지율 ' + state.totalScores[i] + '%';
+    // 지지율 표시 (view 기준)
+    for (let view = 0; view < 5; view++) {
+      const seat = viewToSeat(view);
+      document.getElementById(`total-${view}`).textContent = '지지율 ' + state.totalScores[seat] + '%';
     }
 
     if (state.trickNumber !== undefined) {
@@ -105,22 +107,24 @@ const RemoteAdapter = {
     // Render own hand
     updatePlayerHand();
 
-    // Render AI hands (card backs based on handCounts)
-    for (let i = 0; i < 5; i++) {
-      if (i === localPlayerIndex) continue;
-      const viewI = i; // TODO: viewSeat if needed
-      const el = document.getElementById(`ai-hand-${i}`);
+    // Render AI hands (view 기준)
+    const bw = isMobile() ? 20 : 36;
+    const bh = isMobile() ? 28 : 52;
+    const ml = isMobile() ? '-5px' : '-10px';
+    for (let view = 1; view < 5; view++) {
+      const seat = viewToSeat(view);
+      const el = document.getElementById(`ai-hand-${view}`);
       if (!el) continue;
       el.innerHTML = '';
-      const count = state.handCounts ? state.handCounts[i] : 0;
+      const count = state.handCounts ? state.handCounts[seat] : 0;
       for (let j = 0; j < count; j++) {
-        const back = renderCardBack(36, 52);
-        back.style.marginLeft = j === 0 ? '0' : '-10px';
+        const back = renderCardBack(bw, bh);
+        back.style.marginLeft = j === 0 ? '0' : ml;
         el.appendChild(back);
       }
     }
 
-    // Render current trick
+    // Render current trick (placeCardInSlot은 내부에서 seatToView 사용)
     clearPlayArea();
     if (state.currentTrick) {
       for (const play of state.currentTrick) {

@@ -3063,7 +3063,12 @@ async function doBidding() {
           minBid: game.currentBid.suit ? game.currentBid.number + 1 : 13,
           currentBid: game.currentBid
         });
-        const bid = (res && !res.aiTakeover) ? res : game.aiBid(currentBidder);
+        let bid;
+        if (res && res.aiTakeover) {
+          bid = game.aiBid(currentBidder); // 타임아웃 시 AI 대행
+        } else {
+          bid = res; // null(패스) 또는 {number, suit}(공약) 그대로 사용
+        }
         if (bid === null) {
           game.passedPlayers.add(currentBidder);
           activeBidders--;
@@ -3657,6 +3662,7 @@ async function doTrick(trickNum) {
         SFX.play('joker');
         await showMessage(`${game.playerNames[currentPlayer]}: 조커콜!`, 1400);
         checkFriendReveal(jcCard, currentPlayer);
+        if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
         currentPlayer = (currentPlayer + 1) % 5;
         continue;
       }
@@ -3692,6 +3698,7 @@ async function doTrick(trickNum) {
 
       if (card === 'joker' || game.isMighty(card)) SFX.play('joker');
       checkFriendReveal(card, currentPlayer);
+      if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
     }
 
     currentPlayer = (currentPlayer + 1) % 5;
