@@ -742,6 +742,7 @@ canvas.card-canvas { image-rendering: auto; }
     <div class="subtitle">추억의 카드게임</div>
     <button class="menu-btn" id="btn-solo">1인 플레이 시작</button>
     <button class="menu-btn" id="btn-multi">다인 플레이 시작</button>
+    <button class="menu-btn" id="btn-tutorial">규칙학습</button>
     <button class="menu-btn" id="btn-credits">만든 사람들</button>
     <button class="menu-btn" id="btn-version">버전 정보</button>
   </div>
@@ -758,8 +759,12 @@ canvas.card-canvas { image-rendering: auto; }
   </div>
   <div class="sub-panel" id="panel-version" style="max-height:80vh;overflow-y:auto;text-align:left">
     <h2 style="text-align:center">버전 정보</h2>
-    <p style="text-align:center;font-size:22px;color:#FFD700;font-weight:bold;margin-bottom:16px">v 0.15</p>
+    <p style="text-align:center;font-size:22px;color:#FFD700;font-weight:bold;margin-bottom:16px">v 0.16</p>
     <div style="font-size:13px;color:#ccc;line-height:1.7">
+      <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.16 (2026.04.05)</p>
+      <ul style="margin:4px 0 8px 18px;color:#aaa">
+        <li>인터랙티브 규칙학습 추가 (퀴즈/실습 포함)</li>
+      </ul>
       <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.15 (2026.04.05)</p>
       <ul style="margin:4px 0 8px 18px;color:#aaa">
         <li>AI 마지막 턴 조커 낭비 수정</li>
@@ -3932,6 +3937,10 @@ async function doGameOver() {
   document.getElementById('btn-multi').addEventListener('click', () => {
     Lobby.show();
     Lobby.onStart = startMultiplayer;
+  });
+
+  document.getElementById('btn-tutorial').addEventListener('click', () => {
+    window.open('tutorial.html', '_blank');
   });
 
   document.getElementById('btn-credits').addEventListener('click', () => {
