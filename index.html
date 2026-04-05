@@ -2588,6 +2588,14 @@ let multiplayerMode = {
   playerSlots: ['local', 'ai', 'ai', 'ai', 'ai'] // 'local', 'remote', 'ai'
 };
 
+// seat(게임 논리) → view(화면 위치) 변환: 자신이 항상 view 0(하단)에 오도록
+function seatToView(seat) {
+  return (seat - localPlayerIndex + 5) % 5;
+}
+function viewToSeat(view) {
+  return (view + localPlayerIndex) % 5;
+}
+
 function isLocalPlayer(idx) {
   if (!multiplayerMode.enabled) return idx === 0;
   return multiplayerMode.playerSlots[idx] === 'local';
@@ -2621,10 +2629,11 @@ function updateAIHands() {
   const bw = isMobile() ? 20 : 36;
   const bh = isMobile() ? 28 : 52;
   const ml = isMobile() ? '-5px' : '-10px';
-  for (let i = 1; i < 5; i++) {
-    const el = $(`ai-hand-${i}`);
+  for (let view = 1; view < 5; view++) {
+    const seat = viewToSeat(view);
+    const el = $(`ai-hand-${view}`);
     el.innerHTML = '';
-    for (let j = 0; j < game.hands[i].length; j++) {
+    for (let j = 0; j < game.hands[seat].length; j++) {
       const back = renderCardBack(bw, bh);
       back.style.marginLeft = j === 0 ? '0' : ml;
       el.appendChild(back);
@@ -2659,15 +2668,16 @@ function updatePlayerHand(clickable = false, playableCards = null) {
 }
 
 function updateNameTags() {
-  for (let i = 0; i < 5; i++) {
-    const el = $(`name-${i}`);
+  for (let view = 0; view < 5; view++) {
+    const seat = viewToSeat(view);
+    const el = $(`name-${view}`);
     el.className = 'name-tag';
-    el.textContent = game.playerNames[i];
-    if (i === game.declarer) {
+    el.textContent = game.playerNames[seat];
+    if (seat === game.declarer) {
       el.classList.add('declarer');
       el.textContent += ' (주공)';
     }
-    if (i === game.friend && game.friendRevealed) {
+    if (seat === game.friend && game.friendRevealed) {
       el.classList.add('friend-revealed');
       el.textContent += ' (프렌드)';
     }
@@ -2677,12 +2687,12 @@ function updateNameTags() {
 function updateScoreboard() {
   const el = $('sb-rows');
   el.innerHTML = '';
-  const avatarTypes = ['', 'trump', 'xi', 'putin', 'kim'];
-  for (let i = 0; i < 5; i++) {
+  for (let view = 0; view < 5; view++) {
+    const seat = viewToSeat(view);
     const row = document.createElement('div');
     row.className = 'sb-row';
-    const sc = game.totalScores[i];
-    row.innerHTML = `<span>${game.playerNames[i]}</span><span style="color:${sc > 15 ? '#4caf50' : sc > 5 ? '#FFD700' : '#f44336'}">${sc}%</span>`;
+    const sc = game.totalScores[seat];
+    row.innerHTML = `<span>${game.playerNames[seat]}</span><span style="color:${sc > 15 ? '#4caf50' : sc > 5 ? '#FFD700' : '#f44336'}">${sc}%</span>`;
     el.appendChild(row);
   }
 }
@@ -2710,18 +2720,18 @@ function updatePointCounter() {
 }
 
 function updateWonCardsDisplay() {
-  for (let i = 0; i < 5; i++) {
-    const container = $(`won-${i}`);
+  for (let view = 0; view < 5; view++) {
+    const seat = viewToSeat(view);
+    const container = $(`won-${view}`);
     container.innerHTML = '';
 
-    const isDeclarer = i === game.declarer;
-    const isFriendRevealed = i === game.friend && game.friendRevealed;
+    const isDeclarer = seat === game.declarer;
+    const isFriendRevealed = seat === game.friend && game.friendRevealed;
 
-    // 주공 + 밝혀진 프렌드: 카드를 뒤집어서 덮음 (카드 뒷면만 표시)
     const ww = isMobile() ? 22 : 44;
     const wh = isMobile() ? 32 : 64;
     if (isDeclarer || isFriendRevealed) {
-      const count = game.playerWonPointCards[i].length;
+      const count = game.playerWonPointCards[seat].length;
       if (count > 0) {
         for (let j = 0; j < count; j++) {
           const back = renderCardBack(ww, wh);
@@ -2731,8 +2741,8 @@ function updateWonCardsDisplay() {
         }
       }
     } else {
-      for (let j = 0; j < game.playerWonPointCards[i].length; j++) {
-        const card = renderCard(game.playerWonPointCards[i][j], ww, wh);
+      for (let j = 0; j < game.playerWonPointCards[seat].length; j++) {
+        const card = renderCard(game.playerWonPointCards[seat][j], ww, wh);
         card.classList.add('won-card');
         card.style.marginLeft = j === 0 ? '0' : (isMobile() ? '-6px' : '-10px');
         container.appendChild(card);
@@ -2815,7 +2825,8 @@ async function showShuffleAnimation() {
 }
 
 function placeCardInSlot(player, cardStr) {
-  const slot = $(`slot-${player}`);
+  const view = seatToView(player);
+  const slot = $(`slot-${view}`);
   const pw = isMobile() ? 40 : 72;
   const ph = isMobile() ? 58 : 104;
   const cardEl = renderCard(cardStr, pw, ph);
@@ -2867,10 +2878,9 @@ async function startGame() {
   // 카드를 한 장씩 돌려주는 연출
   const handContainer = $('hand-container');
   handContainer.innerHTML = '';
-  // 다른 플레이어 핸드 비움
-  for (let p = 0; p < 5; p++) {
-    if (p === localPlayerIndex) continue;
-    const el = $(`ai-hand-${p}`);
+  // 다른 플레이어 핸드 비움 (view 기준)
+  for (let view = 1; view < 5; view++) {
+    const el = $(`ai-hand-${view}`);
     if (el) el.innerHTML = '';
   }
 
@@ -2888,13 +2898,13 @@ async function startGame() {
     cardEl.dataset.index = i;
     handContainer.appendChild(cardEl);
 
-    // 다른 플레이어 카드도 한 장씩 추가
-    for (let p = 0; p < 5; p++) {
-      if (p === localPlayerIndex) continue;
-      if (i < game.hands[p].length) {
+    // 다른 플레이어 카드도 한 장씩 추가 (view 기준)
+    for (let view = 1; view < 5; view++) {
+      const seat = viewToSeat(view);
+      if (i < game.hands[seat].length) {
         const back = renderCardBack(bw, bh);
         back.style.marginLeft = i === 0 ? '0' : bml;
-        const ael = $(`ai-hand-${p}`);
+        const ael = $(`ai-hand-${view}`);
         if (ael) ael.appendChild(back);
       }
     }
@@ -2907,7 +2917,7 @@ async function startGame() {
   const dealMissChecked = await checkDealMiss();
   if (dealMissChecked) {
     $('hand-container').innerHTML = '';
-    for (let p = 1; p < 5; p++) { const el = $(`ai-hand-${p}`); if (el) el.innerHTML = ''; }
+    for (let v = 1; v < 5; v++) { const el = $(`ai-hand-${v}`); if (el) el.innerHTML = ''; }
     startGame();
     return;
   }
@@ -2918,7 +2928,7 @@ async function startGame() {
     await showMessage('모두 패스! 다시 딜합니다.', 2200);
     // 기존 카드를 먼저 치움
     $('hand-container').innerHTML = '';
-    for (let p = 1; p < 5; p++) $(`ai-hand-${p}`).innerHTML = '';
+    for (let v = 1; v < 5; v++) $(`ai-hand-${v}`).innerHTML = '';
     startGame();
     return;
   }
@@ -3872,8 +3882,9 @@ async function doScoring() {
   });
 
   updateScoreboard();
-  for (let i = 0; i < 5; i++) {
-    $(`total-${i}`).textContent = '지지율 ' + game.totalScores[i] + '%';
+  for (let view = 0; view < 5; view++) {
+    const seat = viewToSeat(view);
+    $(`total-${view}`).textContent = '지지율 ' + game.totalScores[seat] + '%';
   }
 }
 
@@ -3933,8 +3944,8 @@ async function doGameOver() {
       game.handNumber = 0;
       game.dealer = 0;
       updateScoreboard();
-      for (let i = 0; i < 5; i++) {
-        $(`total-${i}`).textContent = '지지율 20%';
+      for (let view = 0; view < 5; view++) {
+        $(`total-${view}`).textContent = '지지율 20%';
       }
       resolve();
     });
