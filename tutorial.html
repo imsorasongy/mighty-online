@@ -139,12 +139,38 @@ body {
 .hand-area { margin: 14px 0; }
 .hand-label { font-size: 13px; color: #aaa; text-align: center; margin-bottom: 6px; }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+  #app { padding: 12px; }
+  .header h1 { font-size: 24px; }
+  .header p { font-size: 12px; }
+  .lesson h2 { font-size: 19px; }
+  .lesson h3 { font-size: 15px; }
+  .lesson p { font-size: 13px; line-height: 1.7; }
+  .lesson ul { font-size: 13px; }
+  .info, .warn, .example { font-size: 12px; padding: 10px 12px; }
   .card { width: 44px; height: 62px; }
   .card .r { font-size: 13px; }
-  .card .s { font-size: 15px; }
-  .lesson h2 { font-size: 19px; }
+  .card .s { font-size: 16px; }
   .card-back { width: 44px; height: 62px; }
+  .quiz-prompt { font-size: 13px; padding: 10px; }
+  .quiz-result { font-size: 13px; }
+  .quiz-explain { font-size: 12px; }
+  .btn { padding: 8px 16px; font-size: 13px; }
+  .nav-btn { padding: 8px 16px; font-size: 13px; }
+  .tbl th, .tbl td { padding: 5px 6px; font-size: 12px; }
+  .flow-box { font-size: 11px; padding: 5px 8px; }
+  .flow-arr { font-size: 14px; }
+  .scenario-box { font-size: 12px; }
+  .trick-area { padding: 10px; }
+  .cards { gap: 6px; }
+}
+@media (max-width: 400px) {
+  .card { width: 38px; height: 54px; }
+  .card .r { font-size: 11px; }
+  .card .s { font-size: 14px; }
+  .lesson h2 { font-size: 17px; }
+  .btn { padding: 7px 12px; font-size: 12px; }
+  .nav-btn { padding: 7px 12px; font-size: 12px; }
 }
 </style>
 </head>
