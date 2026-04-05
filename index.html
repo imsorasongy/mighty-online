@@ -3873,7 +3873,7 @@ async function doScoring() {
     if (game.totalScores[i] < 0) game.totalScores[i] = 0;
   }
 
-  if (scores[0] > 0) SFX.play('win');
+  if (scores[localPlayerIndex] > 0) SFX.play('win');
   else SFX.play('lose');
 
   await new Promise(resolve => {
@@ -3902,6 +3902,11 @@ async function doScoring() {
       <div class="btn-row">
         <button class="btn primary" id="next-hand">다음 판</button>
       </div>`;
+
+    // 참가자에게도 점수판 전송
+    if (multiplayerMode.enabled && multiplayerMode.isHost) {
+      Network.send('round-result', { html });
+    }
 
     const modal = showModal(html);
     modal.querySelector('#next-hand').addEventListener('click', () => { removeModal(modal); resolve(); });
@@ -3935,10 +3940,10 @@ async function doGameOver() {
     if (game.totalScores[i] <= 0) eliminated.push(game.playerNames[i]);
   }
 
-  SFX.play(winner === 0 ? 'win' : 'lose');
+  SFX.play(winner === localPlayerIndex ? 'win' : 'lose');
 
   await new Promise(resolve => {
-    const isPlayerWin = winner === 0;
+    const isPlayerWin = winner === localPlayerIndex;
     const titleColor = isPlayerWin ? '#FFD700' : '#f44336';
     const titleText = isPlayerWin ? '축하합니다! 우승!' : `${game.playerNames[winner]} 우승!`;
 
@@ -3960,6 +3965,11 @@ async function doGameOver() {
       <div class="btn-row" style="margin-top:20px">
         <button class="btn primary" id="new-game" style="font-size:18px;padding:12px 32px">새 게임</button>
       </div>`;
+
+    // 참가자에게도 게임오버 전송
+    if (multiplayerMode.enabled && multiplayerMode.isHost) {
+      Network.send('game-over', { html });
+    }
 
     const modal = showModal(html);
     modal.querySelector('#new-game').addEventListener('click', () => {
@@ -4100,8 +4110,15 @@ function startMultiplayer(config) {
     if (isHost) {
       // Host runs the game
       startGame();
+    } else {
+      // 참가자: 초기 이름/스코어보드 표시
+      updateNameTags();
+      updateScoreboard();
+      for (let view = 0; view < 5; view++) {
+        const seat = viewToSeat(view);
+        $(`total-${view}`).textContent = '지지율 ' + game.totalScores[seat] + '%';
+      }
     }
-    // Remote clients wait for state-update messages from host
   }, 600);
 }
 </script>
