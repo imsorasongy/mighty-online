@@ -883,6 +883,7 @@ canvas.card-canvas { image-rendering: auto; }
     <div>여당: <span id="ruling-points" style="color:#FFD700">0</span></div>
     <div>야당: <span id="oppo-points" style="color:#00bfff">0</span></div>
     <div style="margin-top:6px;color:#aaa">공약: <span id="bid-display-side" style="color:#fff">-</span></div>
+    <div style="margin-top:4px;color:#aaa">프렌드: <span id="friend-display-side" style="color:#00bfff">-</span></div>
   </div>
 
   <!-- Player areas -->
@@ -2755,6 +2756,32 @@ function updatePointCounter() {
   $('ruling-points').textContent = game.rulingPoints;
   $('oppo-points').textContent = game.oppoPoints;
   $('bid-display-side').textContent = game.currentBid.number + (game.trump === 'notrump' ? ' NT' : game.trump ? ' ' + SUIT_SYMBOLS[game.trump] : '');
+  // 프렌드 표시
+  const friendEl = $('friend-display-side');
+  if (!friendEl) return;
+  if (game.friendRevealed && game.friend != null) {
+    friendEl.textContent = game.playerNames[game.friend];
+    friendEl.style.color = '#00bfff';
+  } else if (game.friendCard) {
+    // 카드로 지정된 프렌드 (예: joker, spades-A 등)
+    const fc = game.friendCard;
+    if (fc === 'joker') {
+      friendEl.textContent = '조커';
+    } else {
+      const parsed = parseCard(fc);
+      friendEl.textContent = parsed ? SUIT_SYMBOLS[parsed.suit] + parsed.rank : fc;
+    }
+    friendEl.style.color = '#aaa';
+  } else if (game.friendType === 'first-trick') {
+    friendEl.textContent = '초구 프렌드';
+    friendEl.style.color = '#aaa';
+  } else if (game.friendType === 'none') {
+    friendEl.textContent = '노프렌드';
+    friendEl.style.color = '#aaa';
+  } else {
+    friendEl.textContent = '-';
+    friendEl.style.color = '#aaa';
+  }
 }
 
 function updateWonCardsDisplay() {
@@ -3743,6 +3770,7 @@ function checkFriendReveal(card, player) {
     game.friendRevealed = true;
     game.friend = player;
     updateNameTags();
+    updatePointCounter();
     // 프렌드 밝혀지면 그 사람의 점수카드를 뒤집어서 덮음
     updateWonCardsDisplay();
     if (player !== game.declarer) {
