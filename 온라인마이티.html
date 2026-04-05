@@ -796,6 +796,7 @@ canvas.card-canvas { image-rendering: auto; }
         <li>다인플레이: 자신의 캐릭터가 항상 하단에 표시</li>
         <li>1인 플레이 닉네임 입력 기능 추가</li>
         <li>게임 중 시작화면으로 복귀 기능</li>
+        <li>카드 배분 후 확인 시간 추가 (공약 전 2초 대기)</li>
       </ul>
       <p style="color:#FFD700;font-weight:bold;margin-top:12px">v 0.17 (2026.04.05)</p>
       <ul style="margin:4px 0 8px 18px;color:#aaa">
@@ -2940,6 +2941,9 @@ async function startGame() {
     SFX.play('deal');
     await delay(100);
   }
+
+  // 카드 확인 시간
+  await delay(2000);
 
   // 딜미스 체크 (카드 배분 후)
   const dealMissChecked = await checkDealMiss();
