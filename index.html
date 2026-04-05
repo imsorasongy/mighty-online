@@ -231,12 +231,15 @@ body {
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.75);
+  background: none;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 200;
-  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+.modal-overlay .modal {
+  pointer-events: auto;
 }
 .modal {
   background: linear-gradient(135deg, #1a2a1a, #0f1f0f);
@@ -938,6 +941,7 @@ canvas.card-canvas { image-rendering: auto; }
   <!-- Scoreboard -->
   <div id="scoreboard">
     <h3>지지율</h3>
+    <div id="sb-friend" style="font-size:13px;color:#00bfff;margin-bottom:6px;display:none;"></div>
     <div id="sb-rows"></div>
   </div>
 </div>
@@ -2718,6 +2722,17 @@ function updateScoreboard() {
     row.innerHTML = `<span>${game.playerNames[seat]}</span><span style="color:${sc > 15 ? '#4caf50' : sc > 5 ? '#FFD700' : '#f44336'}">${sc}%</span>`;
     el.appendChild(row);
   }
+  // 프렌드 정보 표시
+  const friendEl = $('sb-friend');
+  if (game.friendRevealed && game.friend !== null && game.friend !== undefined) {
+    friendEl.style.display = 'block';
+    friendEl.textContent = '프렌드: ' + game.playerNames[game.friend];
+  } else if (game.phase === 'playing' || game.phase === 'trick') {
+    friendEl.style.display = 'block';
+    friendEl.textContent = '프렌드: ???';
+  } else {
+    friendEl.style.display = 'none';
+  }
 }
 
 function updateTrumpIndicator() {
@@ -3088,11 +3103,7 @@ async function doBidding() {
           currentBid: game.currentBid
         });
         let bid;
-        if (res && res.aiTakeover) {
-          bid = game.aiBid(currentBidder); // 타임아웃 시 AI 대행
-        } else {
-          bid = res; // null(패스) 또는 {number, suit}(공약) 그대로 사용
-        }
+        bid = res; // 원격 플레이어 응답 그대로 사용 (AI 대행 없음)
         if (bid === null) {
           game.passedPlayers.add(currentBidder);
           activeBidders--;
@@ -3357,12 +3368,7 @@ async function doExchange() {
       });
 
       let discards;
-      if (res && !res.aiTakeover && res.discards) {
-        discards = res.discards;
-      } else {
-        game.hands[game.declarer] = allCards;
-        discards = game.aiExchange(game.declarer);
-      }
+      discards = res.discards; // 원격 플레이어 응답 그대로 사용 (AI 대행 없음)
       game.discardedPoints = discards.filter(c => isPointCard(c)).length;
       game.hands[game.declarer] = allCards.filter(c => !discards.includes(c));
       updateAIHands();
@@ -3372,7 +3378,7 @@ async function doExchange() {
         currentTrump: game.trump,
         currentBidNum: game.currentBid.number
       });
-      if (trumpRes && !trumpRes.aiTakeover) {
+      if (trumpRes) {
         if (trumpRes.newTrump && trumpRes.newTrump !== game.trump) {
           game.trump = trumpRes.newTrump;
           updateTrumpIndicator();
@@ -3543,11 +3549,7 @@ async function doFriendSelection() {
       const res = await HostAdapter.waitForRemote(game.declarer, 'your-turn-friend', {});
 
       let choice;
-      if (res && !res.aiTakeover && res.type) {
-        choice = res;
-      } else {
-        choice = game.aiSelectFriend(game.declarer);
-      }
+      choice = res; // 원격 플레이어 응답 그대로 사용 (AI 대행 없음)
 
       if (choice.type === 'card') {
         game.friendType = 'card';
@@ -3648,20 +3650,27 @@ async function doTrick(trickNum) {
       // === 원격 플레이어 ===
       if (multiplayerMode.isHost) {
         HostAdapter.broadcastState();
-        const playable = game.getPlayableCards(currentPlayer);
-        const jokerAliveR = !game.usedCards || !game.usedCards.has('joker');
-        const canJokerCall = trickNum > 0 && trickNum < 9 && i === 0 && jokerAliveR && game.hands[currentPlayer].includes(game.getJokerCallCard());
-        const res = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-play', { playableCards: playable, canJokerCall });
+
+        // 조커콜 상황: 조커를 가진 원격 플레이어는 반드시 조커를 내야 함
         let chosenCard;
-        if (res && !res.aiTakeover && res.card) {
-          chosenCard = res.card;
+        if (game.jokerCalled && game.hands[currentPlayer].includes('joker')) {
+          const mighty = game.getMightyCard();
+          if (game.hands[currentPlayer].includes(mighty)) chosenCard = mighty;
+          else chosenCard = 'joker';
+          // 강제 선택이므로 원격 플레이어에게 알림만
+          Network.send('forced-play', { card: chosenCard, reason: 'joker-called' }, currentPlayer);
         } else {
-          chosenCard = game.aiPlayCard(currentPlayer);
+          const playable = game.getPlayableCards(currentPlayer);
+          const jokerAliveR = !game.usedCards || !game.usedCards.has('joker');
+          const canJokerCall = trickNum > 0 && trickNum < 9 && i === 0 && jokerAliveR && game.hands[currentPlayer].includes(game.getJokerCallCard());
+          const res = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-play', { playableCards: playable, canJokerCall });
+          // 원격 플레이어 응답만 사용 (AI 대행 없음)
+          chosenCard = res.card;
         }
+
         if (chosenCard === 'joker' && i === 0) {
-          // Ask remote for suit or AI pick
           const suitRes = await HostAdapter.waitForRemote(currentPlayer, 'your-turn-joker-suit', {});
-          game.jokerDeclaredSuit = (suitRes && !suitRes.aiTakeover && suitRes.suit) ? suitRes.suit : 'spades';
+          game.jokerDeclaredSuit = suitRes.suit || 'spades';
         }
         game.hands[currentPlayer].splice(game.hands[currentPlayer].indexOf(chosenCard), 1);
         game.currentTrick.push({ player: currentPlayer, card: chosenCard });
@@ -3672,8 +3681,8 @@ async function doTrick(trickNum) {
         HostAdapter.broadcastState();
       }
 
-    } else {
-      // === AI ===
+    } else if (!isRemotePlayer(currentPlayer)) {
+      // === AI (원격 플레이어가 아닌 경우에만) ===
       await delay(700 + Math.random() * 400);
 
       if (i === 0 && game.aiShouldJokerCall(currentPlayer)) {
@@ -3893,7 +3902,7 @@ async function doScoring() {
   else SFX.play('lose');
 
   await new Promise(resolve => {
-    const resultText = success ? '성공!' : '실패!';
+    const resultText = success ? '공약 성공!' : '공약 실패!';
     const resultColor = success ? '#4caf50' : '#f44336';
     let multipliersText = '';
     if (isNoTrump) multipliersText += ' [노기루다 x2]';

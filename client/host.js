@@ -33,18 +33,12 @@ const HostAdapter = {
   },
 
   // Wait for a remote player to send a response
+  // No timeout - only AI takeover if player disconnects (handled by onPlayerLeft)
   waitForRemote(seat, requestType, requestPayload) {
     // Send request to specific seat
     Network.send(requestType, requestPayload, seat);
     return new Promise((resolve) => {
       this.pendingResolves[seat] = { resolve };
-      // Timeout: 60 seconds, then AI takes over
-      setTimeout(() => {
-        if (this.pendingResolves[seat]) {
-          this.pendingResolves[seat].resolve({ aiTakeover: true });
-          delete this.pendingResolves[seat];
-        }
-      }, 60000);
     });
   },
 
