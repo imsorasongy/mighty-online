@@ -40,6 +40,9 @@ const RemoteAdapter = {
       case 'your-turn-joker-suit':
         this.handleJokerSuitRequest(payload);
         break;
+      case 'new-round':
+        this.handleNewRound(payload);
+        break;
       case 'show-message':
         showMessage(payload.text, payload.duration || 1800);
         break;
@@ -60,19 +63,6 @@ const RemoteAdapter = {
 
   applyState(state) {
     this.gameState = state;
-
-    // 새 판 감지: 카드 정리 + 배분 애니메이션
-    if (state.handNumber && state.handNumber !== this.lastHandNumber) {
-      this.lastHandNumber = state.handNumber;
-      // 이전 판 카드 정리
-      clearPlayArea();
-      clearWonCards();
-      document.getElementById('hand-container').innerHTML = '';
-      for (let v = 1; v < 5; v++) {
-        const el = document.getElementById(`ai-hand-${v}`);
-        if (el) el.innerHTML = '';
-      }
-    }
 
     // Update game object fields for rendering functions to use
     game.phase = state.phase;
@@ -389,6 +379,22 @@ const RemoteAdapter = {
     const suit = await pickJokerSuit();
     this.waitingForInput = false;
     Network.sendToHost('joker-suit-response', { suit });
+  },
+
+  handleNewRound(payload) {
+    // 화면 정리
+    clearPlayArea();
+    clearWonCards();
+    document.getElementById('hand-container').innerHTML = '';
+    for (let v = 1; v < 5; v++) {
+      const el = document.getElementById(`ai-hand-${v}`);
+      if (el) el.innerHTML = '';
+    }
+    // 트릭/포인트 카운터 숨기기
+    document.getElementById('point-counter').classList.remove('visible');
+    document.getElementById('trick-counter').classList.remove('visible');
+    // 기루다 표시 초기화
+    document.getElementById('trump-indicator').classList.remove('visible');
   },
 
   async handleRoundResult(payload) {

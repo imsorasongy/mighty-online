@@ -2877,6 +2877,12 @@ function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 async function startGame() {
   game.handNumber++;
   game.reset();
+
+  // 멀티플레이: 참가자에게 새 판 시작 알림 (화면 정리)
+  if (multiplayerMode.enabled && multiplayerMode.isHost) {
+    Network.send('new-round', { handNumber: game.handNumber });
+  }
+
   updateScoreboard();
   updateNameTags();
   updateTrumpIndicator();
