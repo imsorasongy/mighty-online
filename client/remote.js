@@ -64,6 +64,20 @@ const RemoteAdapter = {
   applyState(state) {
     this.gameState = state;
 
+    // 카드 배분 연출 대기 중이면 연출 실행 후 리턴
+    if (this.dealingAnimation) {
+      // 게임 상태 업데이트
+      game.phase = state.phase;
+      game.playerNames = state.playerNames;
+      game.totalScores = state.totalScores;
+      game.handNumber = state.handNumber;
+      game.hands[localPlayerIndex] = state.yourHand || [];
+      updateNameTags();
+      updateScoreboard();
+      this.doDealingAnimation(state);
+      return;
+    }
+
     // Update game object fields for rendering functions to use
     game.phase = state.phase;
     game.trump = state.trump;
@@ -381,7 +395,10 @@ const RemoteAdapter = {
     Network.sendToHost('joker-suit-response', { suit });
   },
 
-  handleNewRound(payload) {
+  dealingAnimation: false, // 카드 배분 연출 중 여부
+  pendingDealState: null, // 배분 연출 대기 중인 상태
+
+  async handleNewRound(payload) {
     // 화면 정리
     clearPlayArea();
     clearWonCards();
@@ -390,11 +407,59 @@ const RemoteAdapter = {
       const el = document.getElementById(`ai-hand-${v}`);
       if (el) el.innerHTML = '';
     }
-    // 트릭/포인트 카운터 숨기기
     document.getElementById('point-counter').classList.remove('visible');
     document.getElementById('trick-counter').classList.remove('visible');
-    // 기루다 표시 초기화
     document.getElementById('trump-indicator').classList.remove('visible');
+
+    // 셔플 애니메이션
+    SFX.play('shuffle');
+    await showShuffleAnimation();
+
+    // 다음 state-update에서 카드 배분 연출 실행
+    this.dealingAnimation = true;
+    this.pendingDealState = null;
+  },
+
+  async doDealingAnimation(state) {
+    this.dealingAnimation = false;
+    const handContainer = document.getElementById('hand-container');
+    handContainer.innerHTML = '';
+
+    const myHand = state.yourHand || [];
+    const handCounts = state.handCounts || [];
+
+    const bw = isMobile() ? 20 : 36;
+    const bh = isMobile() ? 28 : 52;
+    const bml = isMobile() ? '-5px' : '-10px';
+    const cw = isMobile() ? 46 : 80;
+    const ch = isMobile() ? 67 : 116;
+
+    const totalCards = myHand.length;
+    for (let i = 0; i < totalCards; i++) {
+      // 내 카드 한 장 추가
+      const cardEl = renderCard(myHand[i], cw, ch);
+      cardEl.classList.add('hand-card');
+      cardEl.dataset.card = myHand[i];
+      cardEl.dataset.index = i;
+      handContainer.appendChild(cardEl);
+
+      // 다른 플레이어 카드도 한 장씩 추가
+      for (let view = 1; view < 5; view++) {
+        const seat = viewToSeat(view);
+        const count = handCounts[seat] || 0;
+        if (i < count) {
+          const el = document.getElementById(`ai-hand-${view}`);
+          if (el) {
+            const back = renderCardBack(bw, bh);
+            back.style.marginLeft = i === 0 ? '0' : bml;
+            el.appendChild(back);
+          }
+        }
+      }
+
+      SFX.play('deal');
+      await new Promise(r => setTimeout(r, 100));
+    }
   },
 
   async handleRoundResult(payload) {
