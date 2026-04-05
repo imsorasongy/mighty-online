@@ -4,6 +4,8 @@
 
 const RemoteAdapter = {
   gameState: null,
+  waitingForInput: false, // 입력 대기 중이면 render에서 핸드 갱신 방지
+  lastHandNumber: 0, // 판 번호 추적
 
   init() {
     Network.onGameMsg = (data) => this.handleMessage(data);
@@ -58,6 +60,20 @@ const RemoteAdapter = {
 
   applyState(state) {
     this.gameState = state;
+
+    // 새 판 감지: 카드 정리 + 배분 애니메이션
+    if (state.handNumber && state.handNumber !== this.lastHandNumber) {
+      this.lastHandNumber = state.handNumber;
+      // 이전 판 카드 정리
+      clearPlayArea();
+      clearWonCards();
+      document.getElementById('hand-container').innerHTML = '';
+      for (let v = 1; v < 5; v++) {
+        const el = document.getElementById(`ai-hand-${v}`);
+        if (el) el.innerHTML = '';
+      }
+    }
+
     // Update game object fields for rendering functions to use
     game.phase = state.phase;
     game.trump = state.trump;
@@ -81,7 +97,7 @@ const RemoteAdapter = {
     // Set own hand
     game.hands[localPlayerIndex] = state.yourHand || [];
 
-    // Render
+    // Render (입력 대기 중이면 핸드카드 갱신 방지)
     this.render(state);
   },
 
@@ -104,8 +120,10 @@ const RemoteAdapter = {
       document.getElementById('point-counter').classList.add('visible');
     }
 
-    // Render own hand
-    updatePlayerHand();
+    // Render own hand (입력 대기 중이면 건드리지 않음)
+    if (!this.waitingForInput) {
+      updatePlayerHand();
+    }
 
     // Render AI hands (view 기준)
     const bw = isMobile() ? 20 : 36;
@@ -136,12 +154,14 @@ const RemoteAdapter = {
   // ========== Turn Handlers ==========
 
   async handleBidRequest(payload) {
-    // Show bidding UI (reuse humanBid)
+    this.waitingForInput = true;
     const bid = await humanBid();
+    this.waitingForInput = false;
     Network.sendToHost('bid-response', bid);
   },
 
   async handleExchangeRequest(payload) {
+    this.waitingForInput = true;
     // payload has { allCards, kittyLabel }
     const allCards = payload.allCards;
     game.sortHand(allCards);
@@ -194,10 +214,12 @@ const RemoteAdapter = {
       render();
     });
 
+    this.waitingForInput = false;
     Network.sendToHost('exchange-response', { discards: result });
   },
 
   async handleTrumpChangeRequest(payload) {
+    this.waitingForInput = true;
     const currentTrump = payload.currentTrump || 'spades';
     const currentBidNum = payload.currentBidNum || 13;
     const result = await new Promise(resolve => {
@@ -262,10 +284,12 @@ const RemoteAdapter = {
       }
       renderTrumpBid();
     });
+    this.waitingForInput = false;
     Network.sendToHost('trump-change-response', result);
   },
 
   async handleFriendRequest(payload) {
+    this.waitingForInput = true;
     // Reuse the friend selection UI
     const result = await new Promise(resolve => {
       let selectedSuit = 'spades';
@@ -341,10 +365,12 @@ const RemoteAdapter = {
       }
       render();
     });
+    this.waitingForInput = false;
     Network.sendToHost('friend-response', result);
   },
 
   async handlePlayRequest(payload) {
+    this.waitingForInput = true;
     const playableCards = payload.playableCards;
     // Show joker call button if applicable
     if (payload.canJokerCall) {
@@ -353,12 +379,15 @@ const RemoteAdapter = {
 
     updatePlayerHand(true, playableCards);
     const chosenCard = await waitForUI();
+    this.waitingForInput = false;
     document.getElementById('joker-call-btn').style.display = 'none';
     Network.sendToHost('play-response', { card: chosenCard });
   },
 
   async handleJokerSuitRequest() {
+    this.waitingForInput = true;
     const suit = await pickJokerSuit();
+    this.waitingForInput = false;
     Network.sendToHost('joker-suit-response', { suit });
   },
 
