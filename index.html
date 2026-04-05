@@ -2354,11 +2354,28 @@ class MightyGame {
     return playable;
   }
 
-  // 마지막 턴에 조커가 낭비되지 않도록, 8~9턴 리드 시 조커를 적극 사용
+  // 조커 사용 판단: 리드 시 조커를 언제 쓸지 결정
   aiShouldUseJokerNow(player, playable) {
     if (!playable.includes('joker')) return false;
-    // 남은 턴이 2턴 이하이고 리드라면 지금 조커 사용
-    if (this.trickNumber >= 8 && this.currentTrick.length === 0) return true;
+    const isLeading = this.currentTrick.length === 0;
+    if (!isLeading) return false;
+
+    // 마지막 2턴에는 반드시 사용 (낭비 방지)
+    if (this.trickNumber >= 8) return true;
+
+    // 중반 이후 (트릭 4~7): 조커 외 확실한 승리 카드가 없으면 조커 사용
+    if (this.trickNumber >= 4) {
+      const nonJoker = playable.filter(c => c !== 'joker' && !this.isMighty(c));
+      const sureWins = nonJoker.filter(c => this.isHighestInSuit(c));
+      if (sureWins.length === 0) return true;
+    }
+
+    // 주공팀이고, 점수가 부족한 상황이면 조커를 일찍 사용
+    if (this.isTeamMember(player) && this.trickNumber >= 3) {
+      const needed = this.currentBid.number;
+      if (this.rulingPoints < needed - 5) return true;
+    }
+
     return false;
   }
 
@@ -2535,10 +2552,46 @@ class MightyGame {
     playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
     const myBest = this.getCardStrength(playable[0], leadSuit);
 
+    // 프렌드인 경우 별도 로직
+    const isFriend = (player === this.friend && player !== this.declarer);
+    const declarerLed = this.currentTrick.length > 0 && this.currentTrick[0].player === this.declarer;
+
+    // === 프렌드 보호 로직 ===
+    if (isFriend && declarerLed) {
+      const leadCardStr = this.currentTrick[0].card;
+      const leadParsed = parseCard(leadCardStr);
+
+      // 주공이 기루다를 리드했을 때: 프렌드가 높은 카드로 보호
+      if (leadParsed && !leadParsed.isJoker && this.trump && this.trump !== 'notrump' && leadParsed.suit === this.trump) {
+        // 주공이 낮은 기루다를 냈다면 (Q 이하) 프렌드가 높은 카드로 이겨줘야 함
+        if (RANK_ORDER[leadParsed.rank] <= RANK_ORDER['Q']) {
+          // 야당이 현재 이기고 있거나 야당이 아직 안 냈으면 보호 필요
+          if (!allyWinning || this.currentTrick.length < 4) {
+            if (myBest > currentBest) {
+              return this.getMinWinCard(playable, leadSuit, currentBest);
+            }
+          }
+        }
+      }
+
+      // 주공이 확실한 승리 카드를 냈을 때: 프렌드는 점수카드 버리기
+      if (allyWinning) {
+        const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
+        if (points.length > 0) return points[0];
+        return this.getLowestCard(playable, leadSuit);
+      }
+
+      // 주공이 지고 있을 때: 프렌드가 이길 수 있으면 적극적으로 이기기
+      if (!allyWinning && myBest > currentBest) {
+        return this.getMinWinCard(playable, leadSuit, currentBest);
+      }
+    }
+
+    // === 기본 여당 로직 ===
     // Ally is winning — save resources
     if (allyWinning) {
       // Dump point cards to ally if safe
-      if (isLast) {
+      if (isLast || this.currentTrick.length >= 3) {
         const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
         if (points.length > 0) return points[0]; // feed points to ally
       }
@@ -2546,11 +2599,11 @@ class MightyGame {
     }
 
     if (myBest > currentBest) {
-      if (trickPoints > 0 || isLast || this.trickNumber >= 7) {
+      if (trickPoints > 0 || isLast || this.trickNumber >= 5) {
         return this.getMinWinCard(playable, leadSuit, currentBest);
       }
-      // Early, no points — still try to win with minimum
-      if (this.trickNumber <= 3) return this.getMinWinCard(playable, leadSuit, currentBest);
+      // Early — still try to win with minimum
+      if (this.trickNumber <= 4) return this.getMinWinCard(playable, leadSuit, currentBest);
       return this.getLowestCard(playable, leadSuit);
     }
     return this.getLowestCard(playable, leadSuit);
