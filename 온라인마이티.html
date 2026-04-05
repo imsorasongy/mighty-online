@@ -759,6 +759,17 @@ canvas.card-canvas { image-rendering: auto; }
     <button class="menu-btn" id="btn-credits">만든 사람들</button>
     <button class="menu-btn" id="btn-version">버전 정보</button>
   </div>
+  <div class="sub-panel" id="panel-solo-name">
+    <h2>1인 플레이</h2>
+    <p style="text-align:center;color:#aaa;font-size:14px;margin-bottom:12px">닉네임을 입력하세요</p>
+    <div style="text-align:center;margin-bottom:16px">
+      <input type="text" id="solo-name-input" value="나" maxlength="8"
+        style="padding:8px 14px;border-radius:8px;border:2px solid #555;background:#1a2a1a;color:#fff;font-size:18px;width:200px;text-align:center">
+    </div>
+    <div style="text-align:center">
+      <button class="close-btn" id="solo-name-start" style="background:#FFD700;color:#0d1a0d;border-color:#FFD700;padding:8px 30px;font-size:16px">게임 시작</button>
+    </div>
+  </div>
   <div class="sub-panel" id="panel-multi">
     <h2>다인 플레이</h2>
     <p>아직 다인플레이 기능은<br>제공하지 않습니다.</p>
@@ -3976,17 +3987,33 @@ async function doGameOver() {
 
   // Menu button handlers
   document.getElementById('btn-solo').addEventListener('click', () => {
-    const titleScreen = document.getElementById('title-screen');
-    titleScreen.style.transition = 'opacity 0.6s';
-    titleScreen.style.opacity = '0';
-    setTimeout(() => {
-      titleScreen.style.display = 'none';
-      document.getElementById('game-container').style.display = 'block';
-      // AudioContext 활성화 + BGM 시작
-      SFX.play('deal');
-      setTimeout(() => BGM.toggle(), 300);
-      startGame();
-    }, 600);
+    // 이름 입력 패널 표시
+    const panel = document.getElementById('panel-solo-name');
+    panel.classList.add('visible');
+    const input = document.getElementById('solo-name-input');
+    input.focus();
+    input.select();
+
+    document.getElementById('solo-name-start').onclick = () => {
+      const name = input.value.trim() || '나';
+      game.playerNames[0] = name;
+      panel.classList.remove('visible');
+
+      const titleScreen = document.getElementById('title-screen');
+      titleScreen.style.transition = 'opacity 0.6s';
+      titleScreen.style.opacity = '0';
+      setTimeout(() => {
+        titleScreen.style.display = 'none';
+        document.getElementById('game-container').style.display = 'block';
+        SFX.play('deal');
+        setTimeout(() => BGM.toggle(), 300);
+        startGame();
+      }, 600);
+    };
+
+    input.addEventListener('keyup', (e) => {
+      if (e.key === 'Enter') document.getElementById('solo-name-start').click();
+    });
   });
 
   document.getElementById('btn-multi').addEventListener('click', () => {
