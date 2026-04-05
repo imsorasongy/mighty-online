@@ -840,8 +840,11 @@ canvas.card-canvas { image-rendering: auto; }
 
 <div id="game-container" style="display:none">
   <div id="top-bar">
-    <div class="logo">MIGHTY</div>
-    <div class="info" id="game-info">5인 마이티</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="logo">MIGHTY</div>
+      <div class="info" id="game-info">5인 마이티</div>
+    </div>
+    <button id="btn-to-main" onclick="goToMain()" style="background:rgba(255,255,255,0.1);border:1px solid #888;color:#ccc;padding:4px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:bold;transition:all 0.15s" onmouseover="this.style.borderColor='#FFD700';this.style.color='#FFD700'" onmouseout="this.style.borderColor='#888';this.style.color='#ccc'">메인화면</button>
   </div>
 
   <button id="sfx-btn" class="on" onclick="SFX.toggle()">효과음 ON</button>
@@ -3726,6 +3729,19 @@ async function checkDealMiss() {
     }
   }
   return false;
+}
+
+function goToMain() {
+  if (!confirm('게임을 종료하고 메인화면으로 돌아가시겠습니까?')) return;
+  // 네트워크 연결 해제
+  if (typeof Network !== 'undefined' && Network.disconnect) Network.disconnect();
+  // 게임 화면 숨기고 타이틀 표시
+  document.getElementById('game-container').style.display = 'none';
+  const titleScreen = document.getElementById('title-screen');
+  titleScreen.style.display = 'flex';
+  titleScreen.style.opacity = '1';
+  // BGM 정지
+  if (typeof BGM !== 'undefined' && BGM.stop) BGM.stop();
 }
 
 game.doJokerCall = function() {
