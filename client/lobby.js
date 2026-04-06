@@ -20,6 +20,9 @@ const Lobby = {
           <button class="btn primary" id="lobby-create">방 만들기</button>
           <button class="btn" id="lobby-join-show">방 참가</button>
         </div>
+        <div style="margin-top:10px">
+          <button class="btn" id="lobby-back-main" style="font-size:13px">나가기</button>
+        </div>
         <div id="lobby-join-input" style="display:none;margin-top:14px;text-align:center">
           <input type="text" id="lobby-code-input" placeholder="방 코드 입력" maxlength="4"
             style="padding:8px 14px;border-radius:8px;border:2px solid #555;background:#1a2a1a;color:#FFD700;font-size:22px;width:140px;text-align:center;letter-spacing:6px;text-transform:uppercase">
@@ -67,6 +70,9 @@ const Lobby = {
     panel.classList.add('visible');
 
     // Wire up events
+    document.getElementById('lobby-back-main').onclick = () => {
+      panel.classList.remove('visible');
+    };
     document.getElementById('lobby-create').onclick = () => this.createRoom();
     document.getElementById('lobby-join-show').onclick = () => {
       document.getElementById('lobby-join-input').style.display = 'block';
