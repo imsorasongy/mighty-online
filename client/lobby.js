@@ -24,6 +24,9 @@ const Lobby = {
           <input type="text" id="lobby-code-input" placeholder="방 코드 입력" maxlength="4"
             style="padding:8px 14px;border-radius:8px;border:2px solid #555;background:#1a2a1a;color:#FFD700;font-size:22px;width:140px;text-align:center;letter-spacing:6px;text-transform:uppercase">
           <button class="btn primary" id="lobby-join-go" style="margin-left:8px">참가</button>
+          <div style="margin-top:10px">
+            <button class="btn" id="lobby-join-back" style="font-size:13px">나가기</button>
+          </div>
         </div>
         <p id="lobby-error" style="color:#f44336;font-size:14px;margin-top:10px;display:none"></p>
       </div>
@@ -69,6 +72,10 @@ const Lobby = {
       document.getElementById('lobby-join-input').style.display = 'block';
     };
     document.getElementById('lobby-join-go').onclick = () => this.joinRoom();
+    document.getElementById('lobby-join-back').onclick = () => {
+      document.getElementById('lobby-join-input').style.display = 'none';
+      document.getElementById('lobby-code-input').value = '';
+    };
     document.getElementById('lobby-code-input').addEventListener('keyup', (e) => {
       if (e.key === 'Enter') this.joinRoom();
     });
