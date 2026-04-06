@@ -2674,15 +2674,22 @@ class MightyGame {
 
   aiShouldJokerCall(player) {
     const jcCard = this.getJokerCallCard();
+    // 조커콜 카드가 핸드에 있는지 확인
     if (!this.hands[player].includes(jcCard)) return false;
+    // 트릭 0(첫 트릭)에서는 조커콜 불가
     if (this.trickNumber === 0) return false;
+    // 트릭 9(마지막 트릭)에서는 조커콜 불가 (조커가 어차피 효과 없음)
+    if (this.trickNumber >= 9) return false;
+    // 여당은 조커콜 안 함
     if (this.isTeamMember(player)) return false;
     // 조커가 이미 사용되었으면 조커콜 불가
     if (this.usedCards && this.usedCards.has('joker')) return false;
-    // Call joker when there are point cards at stake or mid-late game
-    if (this.trickNumber >= 3 && this.trickNumber <= 8) return true;
-    if (this.trickNumber >= 7) return true;
-    return Math.random() > 0.4;
+    // 리드 포지션(i===0)에서만 조커콜 가능 (doTrick에서 이미 체크하지만 이중 확인)
+    if (this.currentTrick.length !== 0) return false;
+    // 중반~후반 (트릭 3~8)에서 조커콜
+    if (this.trickNumber >= 3) return true;
+    // 초반(트릭 1~2)에서는 낮은 확률
+    return Math.random() > 0.7;
   }
 }
 
