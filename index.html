@@ -2560,52 +2560,70 @@ class MightyGame {
     }
   }
 
+  // 주공이 현재 트릭에서 이길 수 있는지 판단
+  aiDeclarerCanWin(leadSuit) {
+    // 주공이 아직 카드를 안 냈으면 판단 불가 → 이길 수 있다고 가정
+    const declarerPlayed = this.currentTrick.find(t => t.player === this.declarer);
+    if (!declarerPlayed) return true;
+    const declarerStr = this.getCardStrength(declarerPlayed.card, leadSuit);
+    // 현재까지 나온 카드 중 주공보다 강한 카드가 있으면 주공이 지고 있음
+    for (const t of this.currentTrick) {
+      if (t.player === this.declarer) continue;
+      if (this.getCardStrength(t.card, leadSuit) > declarerStr) return false;
+    }
+    return true;
+  }
+
   aiFollowDeclarer(player, playable, leadSuit, currentBest, trickPoints, isLast, allyWinning) {
     playable.sort((a, b) => this.getCardStrength(b, leadSuit) - this.getCardStrength(a, leadSuit));
     const myBest = this.getCardStrength(playable[0], leadSuit);
 
-    // 프렌드인 경우 별도 로직
     const isFriend = (player === this.friend && player !== this.declarer);
     const declarerLed = this.currentTrick.length > 0 && this.currentTrick[0].player === this.declarer;
+    const declarerCanWin = this.aiDeclarerCanWin(leadSuit);
 
-    // === 프렌드 보호 로직 ===
-    if (isFriend && declarerLed) {
-      const leadCardStr = this.currentTrick[0].card;
-      const leadParsed = parseCard(leadCardStr);
+    // === 프렌드 전용 로직 ===
+    if (isFriend) {
+      // 1) 주공이 이기고 있거나 이길 수 있는 트릭 → 방어 불필요, 점수 넘기기
+      if (allyWinning || declarerCanWin) {
+        const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
+        if (points.length > 0) return points[0]; // 점수카드 전달
+        return this.getLowestCard(playable, leadSuit); // 낮은 카드 버리기
+      }
 
-      // 주공이 기루다를 리드했을 때: 프렌드가 높은 카드로 보호
-      if (leadParsed && !leadParsed.isJoker && this.trump && this.trump !== 'notrump' && leadParsed.suit === this.trump) {
-        // 주공이 낮은 기루다를 냈다면 (Q 이하) 프렌드가 높은 카드로 이겨줘야 함
-        if (RANK_ORDER[leadParsed.rank] <= RANK_ORDER['Q']) {
-          // 야당이 현재 이기고 있거나 야당이 아직 안 냈으면 보호 필요
-          if (!allyWinning || this.currentTrick.length < 4) {
+      // 2) 주공이 지고 있고, 야당이 이기면 점수를 뺏길 때 → 방어
+      if (!allyWinning) {
+        // 이 트릭에 점수카드가 있거나 후반이면 반드시 방어
+        if (trickPoints > 0 || this.trickNumber >= 5) {
+          if (myBest > currentBest) {
+            return this.getMinWinCard(playable, leadSuit, currentBest);
+          }
+        }
+        // 주공이 기루다를 리드했는데 야당에게 뺏기고 있으면 보호
+        if (declarerLed) {
+          const leadParsed = parseCard(this.currentTrick[0].card);
+          if (leadParsed && !leadParsed.isJoker && this.trump && this.trump !== 'notrump' && leadParsed.suit === this.trump) {
             if (myBest > currentBest) {
               return this.getMinWinCard(playable, leadSuit, currentBest);
             }
           }
         }
+        // 이길 수 있고, 점수 없더라도 후반이면 방어
+        if (myBest > currentBest && this.trickNumber >= 3) {
+          return this.getMinWinCard(playable, leadSuit, currentBest);
+        }
       }
 
-      // 주공이 확실한 승리 카드를 냈을 때: 프렌드는 점수카드 버리기
-      if (allyWinning) {
-        const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
-        if (points.length > 0) return points[0];
-        return this.getLowestCard(playable, leadSuit);
-      }
-
-      // 주공이 지고 있을 때: 프렌드가 이길 수 있으면 적극적으로 이기기
-      if (!allyWinning && myBest > currentBest) {
-        return this.getMinWinCard(playable, leadSuit, currentBest);
-      }
+      // 3) 그 외: 낮은 카드 버리기
+      return this.getLowestCard(playable, leadSuit);
     }
 
-    // === 기본 여당 로직 ===
-    // Ally is winning — save resources
+    // === 주공 본인 로직 ===
     if (allyWinning) {
-      // Dump point cards to ally if safe
+      // 아군이 이기고 있으면 점수카드 전달
       if (isLast || this.currentTrick.length >= 3) {
         const points = playable.filter(c => isPointCard(c) && !this.isMighty(c) && c !== 'joker');
-        if (points.length > 0) return points[0]; // feed points to ally
+        if (points.length > 0) return points[0];
       }
       return this.getLowestCard(playable, leadSuit);
     }
@@ -2614,7 +2632,6 @@ class MightyGame {
       if (trickPoints > 0 || isLast || this.trickNumber >= 5) {
         return this.getMinWinCard(playable, leadSuit, currentBest);
       }
-      // Early — still try to win with minimum
       if (this.trickNumber <= 4) return this.getMinWinCard(playable, leadSuit, currentBest);
       return this.getLowestCard(playable, leadSuit);
     }
@@ -3779,17 +3796,23 @@ async function doTrick(trickNum) {
 
       if (i === 0 && game.aiShouldJokerCall(currentPlayer)) {
         const jcCard = game.getJokerCallCard();
-        game.jokerCalled = true;
-        game.hands[currentPlayer].splice(game.hands[currentPlayer].indexOf(jcCard), 1);
-        game.currentTrick.push({ player: currentPlayer, card: jcCard });
-        placeCardInSlot(currentPlayer, jcCard);
-        updateAIHands();
-        SFX.play('joker');
-        await showMessage(`${game.playerNames[currentPlayer]}: 조커콜!`, 1400);
-        checkFriendReveal(jcCard, currentPlayer);
-        if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
-        currentPlayer = (currentPlayer + 1) % 5;
-        continue;
+        const jcIdx = game.hands[currentPlayer].indexOf(jcCard);
+        // 조커콜 카드가 실제로 핸드에 있는지 재검증
+        if (jcIdx !== -1) {
+          game.jokerCalled = true;
+          game.hands[currentPlayer].splice(jcIdx, 1);
+          game.currentTrick.push({ player: currentPlayer, card: jcCard });
+          placeCardInSlot(currentPlayer, jcCard);
+          updateAIHands();
+          SFX.play('joker');
+          await showMessage(`${game.playerNames[currentPlayer]}: 조커콜!`, 1400);
+          checkFriendReveal(jcCard, currentPlayer);
+          if (multiplayerMode.enabled && multiplayerMode.isHost) HostAdapter.broadcastState();
+          currentPlayer = (currentPlayer + 1) % 5;
+          continue;
+        } else {
+          console.warn('조커콜 카드가 핸드에 없음:', jcCard, game.hands[currentPlayer]);
+        }
       }
 
       let card;

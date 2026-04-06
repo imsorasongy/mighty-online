@@ -64,6 +64,7 @@ const HostAdapter = {
       currentBid: game.currentBid,
       trickNumber: game.trickNumber,
       currentTrick: game.currentTrick,
+      jokerCalled: game.jokerCalled,
       trickLeader: game.trickLeader,
       currentPlayer: game.currentPlayer,
       rulingPoints: game.rulingPoints,
